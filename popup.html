@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mike-AutomationAI</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Video Batch Downloader</p>
+          <h1>Mike-AutomationAI</h1>
+          <small>Download Facebook, Tiktok, Instagram, Douyin, Telegram Web và video trực tiếp</small>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+          <button id="themeToggle" class="ghost" aria-label="Đổi giao diện" style="width: 32px; height: 32px; padding: 0; font-size: 16px; border-radius: 8px;">🌓</button>
+          <span id="runBadge" class="status-badge idle">Sẵn sàng</span>
+        </div>
+      </section>
+
+      <section class="panel crawler-panel">
+        <div class="section-title tight">
+          <h2>Quét kênh video</h2>
+          <span id="savedCountChip" class="micro-chip">Đã lưu 0 link</span>
+        </div>
+
+        <div class="crawler-grid">
+          <div class="field-row channel-field">
+            <label for="channelUrl">Link kênh Facebook / TikTok</label>
+            <input id="channelUrl" type="text" placeholder="https://www.tiktok.com/@tvmlb55">
+          </div>
+          <div class="field-row count-field">
+            <label for="maxReels">Số lượng</label>
+            <input id="maxReels" type="number" min="1" max="500" step="1" value="50">
+          </div>
+          <div class="field-row min-view-field">
+            <label for="minViews">View tối thiểu</label>
+            <input id="minViews" type="text" inputmode="numeric" value="0" placeholder="Ví dụ: 1000, 10000, 100000">
+          </div>
+        </div>
+
+        <div class="actions crawler-actions">
+          <button id="crawlBtn" class="primary" type="button">Quét link video</button>
+          <button id="loadSavedBtn" type="button">Tải link đã quét</button>
+        </div>
+        <small id="lastCrawlInfo">Chưa quét kênh nào.</small>
+      </section>
+
+      <section class="panel controls-panel">
+        <div class="section-title tight">
+          <h2>Tải link lên</h2>
+          <span class="micro-chip">TXT / CSV / Dán link</span>
+        </div>
+
+        <div class="upload-grid">
+          <label class="file-drop" for="linkFile">
+            <span class="file-icon">+</span>
+            <span>
+              <strong>Tải file link</strong>
+              <small>.txt, .csv hoặc file có chứa URL</small>
+            </span>
+            <input id="linkFile" type="file" accept=".txt,.csv,text/plain,text/csv">
+          </label>
+
+          <div class="manual-links">
+            <textarea id="manualLinks" placeholder="Dán link vào đây, mỗi dòng một link"></textarea>
+            <button id="importTextBtn" class="secondary" type="button">Nạp link</button>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <label for="downloadFolder">Thư mục tải về</label>
+          <input id="downloadFolder" type="text" placeholder="Ví dụ: SO9-Downloads">
+          <small>Lưu trong Downloads của Chrome, ví dụ Downloads/SO9-Downloads.</small>
+        </div>
+
+        <div class="metrics">
+          <div>
+            <span id="totalCount">0</span>
+            <small>Tổng link</small>
+          </div>
+          <div>
+            <span id="successCount">0</span>
+            <small>Thành công</small>
+          </div>
+          <div>
+            <span id="failedCount">0</span>
+            <small>Thất bại</small>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="startBtn" class="primary" type="button">Chạy automation</button>
+          <button id="pauseBtn" type="button" disabled>Tạm dừng</button>
+          <button id="stopBtn" type="button" disabled>Dừng</button>
+        </div>
+      </section>
+
+      <section class="panel queue-panel">
+        <div class="section-title">
+          <h2>Danh sách link</h2>
+          <button id="clearBtn" class="ghost" type="button">Xóa</button>
+        </div>
+        <div id="queueList" class="queue-list empty">Chưa có link nào được tải lên.</div>
+      </section>
+
+      <section class="panel log-panel">
+        <div class="section-title">
+          <h2>Log trạng thái</h2>
+          <button id="exportLogBtn" class="ghost" type="button">Xuất log</button>
+        </div>
+        <div id="logList" class="log-list"></div>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

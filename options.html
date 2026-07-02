@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cài đặt Mike-AutomationAI</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell options-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Mike-AutomationAI</p>
+          <h1>Cài đặt Mike-AutomationAI</h1>
+        </div>
+        <button id="themeToggle" class="ghost" aria-label="Đổi giao diện" style="width: 32px; height: 32px; padding: 0; font-size: 16px; border-radius: 8px;">🌓</button>
+      </section>
+      <section class="panel">
+        <div class="field-row">
+          <label for="timeoutSeconds">Thời gian đợi mỗi link (giây)</label>
+          <input id="timeoutSeconds" type="number" min="20" max="300" step="5">
+        </div>
+        <div class="field-row">
+          <label for="downloadFolder">Thư mục con trong Downloads</label>
+          <input id="downloadFolder" type="text">
+        </div>
+        <button id="saveBtn" class="primary" type="button">Lưu cài đặt</button>
+        <p id="saveStatus" class="save-status"></p>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

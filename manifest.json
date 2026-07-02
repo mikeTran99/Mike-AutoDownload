@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "Mike-AutomationAI",
+  "description": "Tự động download video Facebook, TikTok, Instagram, Douyin qua SO9, quét kênh Facebook/TikTok và video hợp lệ trên Telegram Web.",
+  "version": "1.2.0",
+  "icons": {
+    "16": "icons/mike-16.png",
+    "32": "icons/mike-32.png",
+    "48": "icons/mike-48.png",
+    "128": "icons/mike-128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Mike-AutomationAI",
+    "default_icon": {
+      "16": "icons/mike-16.png",
+      "32": "icons/mike-32.png",
+      "48": "icons/mike-48.png",
+      "128": "icons/mike-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "permissions": [
+    "downloads",
+    "storage",
+    "tabs",
+    "scripting",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://so9.vn/*",
+    "https://www.facebook.com/*",
+    "https://facebook.com/*",
+    "https://www.tiktok.com/*",
+    "https://tiktok.com/*",
+    "https://www.instagram.com/*",
+    "https://instagram.com/*",
+    "https://www.douyin.com/*",
+    "https://douyin.com/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://so9.vn/9downloader/*"
+      ],
+      "js": [
+        "content-script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html"
+}

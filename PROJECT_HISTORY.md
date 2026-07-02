@@ -1,0 +1,35 @@
+# Project History
+
+## 2026-05-10
+- User confirmed `Mike-AutomationAI` is working smoothly after the latest extension update.
+- Logo was updated from `E:\3_JOBS\MechaMike.jpg` into PNG extension icons under `icons/`.
+- SO9 automation was refactored to reduce manual work and avoid the previous `USER_CANCELED` failure path:
+  - prepare link on SO9 first,
+  - prefer direct `chrome.downloads.download`,
+  - arm download listeners before fallback clicking SO9 final download controls.
+- Keep this state as the baseline for future fixes.
+
+## 2026-05-10 Direct Media Upgrade
+- Added a safe direct-media path beside the SO9 flow.
+- Direct file links such as `.mp4`, `.m4v`, `.mov`, and `.webm` can be downloaded with Chrome Download API.
+- Generic web pages can be scanned only after Chrome grants host permission, and only for public/page-exposed direct video URLs.
+- HLS/DASH, blob streams, DRM, paywall/login bypass, and unauthorized adult/copyright-site downloading are intentionally unsupported.
+
+## 2026-05-10 Telegram Web Upgrade
+- Deleted old packaged artifacts from `dist/`.
+- Added Telegram Web support for authorized private media:
+  - accepts `https://web.telegram.org/...` links,
+  - converts private `https://t.me/c/<chat>/<message>` links to Telegram Web deep links,
+  - opens the Telegram Web video surface and clicks the visible Telegram download/save control when available.
+- This does not bypass Telegram login, encryption, chat permissions, disabled downloads/forwarding, or account access controls.
+
+## 2026-05-10 UI/UX Upgrade
+- Upgraded the popup and options UI to a premium 3D Luxury (Neumorphism) aesthetic.
+- Added a Light/Dark Mode toggle (saved to `chrome.storage.local`).
+- Applied a "Royal Blue & Gold" color scheme for buttons, icons, and headings.
+- Cleaned up the old packaged artifacts from `dist/`.
+
+## 2026-05-12 Channel Crawler Upgrade
+- Reintroduced the Version 2 Facebook Reels / TikTok profile crawler into the current Mike-AutomationAI build.
+- Added popup controls for channel URL, maximum videos, minimum view filter, saved crawler count, and loading the latest saved crawl.
+- Crawler output is stored as normal SO9 queue items and keeps the current direct-download-first SO9 automation path.
