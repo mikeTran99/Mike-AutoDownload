@@ -10,7 +10,6 @@
     "128": "icons/mike-128.png"
   },
   "action": {
-    "default_popup": "popup.html",
     "default_title": "Mike-AutomationAI",
     "default_icon": {
       "16": "icons/mike-16.png",
@@ -28,7 +27,8 @@
     "storage",
     "tabs",
     "scripting",
-    "notifications"
+    "notifications",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://so9.vn/*",
@@ -56,5 +56,8 @@
       "run_at": "document_idle"
     }
   ],
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "side_panel": {
+    "default_path": "popup.html"
+  }
 }

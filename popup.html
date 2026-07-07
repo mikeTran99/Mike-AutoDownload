@@ -29,7 +29,7 @@
         <div class="crawler-grid">
           <div class="field-row channel-field">
             <label for="channelUrl">Link kênh Facebook / TikTok</label>
-            <input id="channelUrl" type="text" placeholder="https://www.tiktok.com/@tvmlb55">
+            <input id="channelUrl" type="text" placeholder="Ví dụ: https://www.tiktok.com/@username">
           </div>
           <div class="field-row count-field">
             <label for="maxReels">Số lượng</label>
@@ -45,7 +45,10 @@
           <button id="crawlBtn" class="primary" type="button">Quét link video</button>
           <button id="loadSavedBtn" type="button">Tải link đã quét</button>
         </div>
-        <small id="lastCrawlInfo">Chưa quét kênh nào.</small>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+          <small id="lastCrawlInfo">Chưa quét kênh nào.</small>
+          <button id="clearDataBtn" class="ghost" type="button" style="font-size: 12px; padding: 4px 8px; color: var(--danger-color, #ff4d4f);">Xóa dữ liệu cũ</button>
+        </div>
       </section>
 
       <section class="panel controls-panel">

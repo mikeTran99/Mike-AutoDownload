@@ -53,7 +53,8 @@ const els = {
   success: document.getElementById("successCount"),
   failed: document.getElementById("failedCount"),
   badge: document.getElementById("runBadge"),
-  themeToggle: document.getElementById("themeToggle")
+  themeToggle: document.getElementById("themeToggle"),
+  clearData: document.getElementById("clearDataBtn")
 };
 
 init();
@@ -73,7 +74,7 @@ function init() {
     "lastMinViews"
   ], (data) => {
     els.folder.value = data.downloadFolder || "SO9-Downloads";
-    els.channelUrl.value = data.lastCrawlSource || "https://www.tiktok.com/@tvmlb55";
+    els.channelUrl.value = data.lastCrawlSource || "";
     els.maxReels.value = data.lastCrawlMax || 50;
     els.minViews.value = data.lastMinViews || 0;
     state.queue = data.queue || [];
@@ -106,6 +107,40 @@ function init() {
   els.clear.addEventListener("click", clearQueue);
   els.exportLog.addEventListener("click", exportLogs);
   els.themeToggle.addEventListener("click", toggleTheme);
+  els.clearData.addEventListener("click", clearAllData);
+}
+
+async function clearAllData() {
+  if (state.running) {
+    addLog("Không thể xóa dữ liệu khi đang chạy.", "warn");
+    render();
+    return;
+  }
+  if (!confirm("Bạn có chắc chắn muốn xóa toàn bộ dữ liệu cũ (link đã lưu, danh sách tải, log, thông tin quét kênh)?")) return;
+  
+  state.queue = [];
+  state.logs = [];
+  state.savedReelLinks = [];
+  state.savedReelItems = [];
+  state.lastCrawlSource = "";
+  state.lastCrawlTime = 0;
+  els.channelUrl.value = "";
+  els.maxReels.value = "";
+  els.minViews.value = "";
+  
+  await chrome.storage.local.remove([
+    "queue", 
+    "logs", 
+    "savedReelLinks", 
+    "savedReelItems", 
+    "lastCrawlSource", 
+    "lastCrawlTime", 
+    "lastCrawlMax", 
+    "lastMinViews"
+  ]);
+  
+  await persist();
+  render();
 }
 
 async function toggleTheme() {

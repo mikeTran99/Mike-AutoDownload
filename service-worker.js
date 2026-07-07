@@ -5,6 +5,10 @@ let stopped = false;
 let activeTabId = null;
 let activeDownloadIds = new Set();
 
+if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message).then(sendResponse).catch((error) => {
     appendLog(error.message || String(error), "error");
