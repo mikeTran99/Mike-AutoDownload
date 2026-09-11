@@ -200,9 +200,15 @@ function init() {
   els.contactDialog.addEventListener("click", (event) => {
     if (event.target === els.contactDialog) els.contactDialog.close();
   });
-  const hideMissingQr = () => els.contactQr.closest("figure").classList.add("missing");
-  els.contactQr.addEventListener("error", hideMissingQr);
-  if (els.contactQr.complete && !els.contactQr.naturalWidth) hideMissingQr();
+  // Ảnh QR Telegram: thử assets/telegram-qr.png rồi .jpg; không có file nào thì ẩn ô QR.
+  const qrSources = ["assets/telegram-qr.png", "assets/telegram-qr.jpg"];
+  const tryNextQr = () => {
+    const next = qrSources.shift();
+    if (next) els.contactQr.src = next;
+    else els.contactQr.closest("figure").classList.add("missing");
+  };
+  els.contactQr.addEventListener("error", tryNextQr);
+  if (!els.contactQr.getAttribute("src") || (els.contactQr.complete && !els.contactQr.naturalWidth)) tryNextQr();
   els.clearStats.addEventListener("click", clearStats);
   els.clearData.addEventListener("click", clearAllData);
 }
