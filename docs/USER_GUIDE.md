@@ -291,6 +291,13 @@ Trạng thái job đang chạy được lưu cục bộ để service worker có
 
 Sau mỗi lần **Quét link video**, bảng **Thống kê kênh** hiện: số follower/subscriber đọc trên trang kênh, số video quét được, tổng view, view trung bình, top 5 video nhiều view nhất (bấm để mở) và mức tăng/giảm so với lần quét trước của cùng kênh. Quét lại định kỳ để theo dõi tăng trưởng. **Xuất CSV** lưu toàn bộ kênh đã thống kê; **Xóa** xoá thống kê (không ảnh hưởng danh sách tải).
 
-## 24. Kiểm thử mã nguồn
+## 24. Hàng đợi lớn
+
+- Nạp file/dán link nhiều lần: link mới được **thêm vào** hàng đợi, link trùng (kể cả đã tải xong) bị bỏ qua — log ghi rõ số thêm/số trùng.
+- Bộ lọc **Tất cả / Chờ tải / Đang tải / Thành công / Thất bại** kèm số lượng; nút ✕ trên mỗi link để bỏ; **Dọn link xong** xoá link đã tải và link không hỗ trợ để hàng đợi gọn.
+- Với hàng đợi vài nghìn link, bảng chỉ hiện 150 mục mỗi lần, bấm **Xem thêm** để tải tiếp.
+- Instagram: dán link profile (`instagram.com/ten/`) — extension tự chuyển sang tab **Reels** để quét vì tab profile chỉ hiện lưới bài viết.
+
+## 25. Kiểm thử mã nguồn
 
 Chạy `npm run check` (Node 22+) để kiểm tra cú pháp và hợp đồng MV3 (manifest, quyền, thông điệp runtime).

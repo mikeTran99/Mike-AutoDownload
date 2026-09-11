@@ -16,6 +16,7 @@
         </div>
         <div class="hero-tools">
           <div class="hero-buttons">
+            <button id="contactBtn" class="ghost icon-button" type="button" aria-label="Liên hệ" title="Liên hệ">✉</button>
             <button id="langToggle" class="ghost icon-button" type="button" aria-label="Đổi ngôn ngữ" title="Đổi ngôn ngữ">EN</button>
             <button id="themeToggle" class="ghost icon-button" type="button" aria-label="Đổi giao diện" title="Đổi giao diện">🌓</button>
           </div>
@@ -119,9 +120,20 @@
       <section class="panel queue-panel">
         <div class="section-title">
           <h2>Danh sách link</h2>
-          <button id="clearBtn" class="ghost" type="button">Xóa</button>
+          <div class="hero-buttons">
+            <button id="pruneBtn" class="ghost" type="button" title="Bỏ link đã tải xong và link không hỗ trợ">Dọn link xong</button>
+            <button id="clearBtn" class="ghost" type="button">Xóa</button>
+          </div>
+        </div>
+        <div id="queueFilters" class="queue-filters" role="tablist">
+          <button type="button" data-filter="all" class="active">Tất cả</button>
+          <button type="button" data-filter="pending">Chờ tải</button>
+          <button type="button" data-filter="running">Đang tải</button>
+          <button type="button" data-filter="success">Thành công</button>
+          <button type="button" data-filter="failed">Thất bại</button>
         </div>
         <div id="queueList" class="queue-list empty">Chưa có link nào được tải lên.</div>
+        <button id="queueMoreBtn" class="ghost queue-more" type="button" hidden>Xem thêm</button>
       </section>
 
       <section class="panel log-panel">
@@ -132,6 +144,23 @@
         <div id="logList" class="log-list" role="log" aria-live="polite"></div>
       </section>
     </main>
+    <dialog id="contactDialog" class="contact-dialog">
+      <div class="contact-card">
+        <div class="section-title">
+          <h2>Liên hệ Mike</h2>
+          <button id="contactClose" class="ghost icon-button" type="button" aria-label="Đóng" title="Đóng">✕</button>
+        </div>
+        <p>Góp ý, báo lỗi hoặc đặt tính năng mới cho Mike-Autodownload.</p>
+        <div class="contact-links">
+          <a href="https://www.facebook.com/tlmt66/" target="_blank" rel="noopener">Facebook · fb.com/tlmt66</a>
+          <a href="mailto:tlmtrung.ntt.it@gmail.com">Gmail · tlmtrung.ntt.it@gmail.com</a>
+        </div>
+        <figure class="contact-qr">
+          <img id="contactQr" src="assets/telegram-qr.png" alt="Telegram QR">
+          <figcaption>Telegram · quét mã QR để nhắn tin</figcaption>
+        </figure>
+      </div>
+    </dialog>
     <script type="module" src="popup.js"></script>
   </body>
 </html>

@@ -854,3 +854,24 @@ button:disabled {
 .stats-trend { font-size: 10.5px; margin-top: 6px; opacity: 0.85; }
 .stats-trend .up { color: var(--success); }
 .stats-trend .down { color: var(--danger); }
+
+/* ---- Quản lý hàng đợi */
+.queue-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.queue-filters button { min-height: 28px; padding: 4px 10px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 999px; }
+.queue-filters button.active { color: var(--gold-primary); box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
+.queue-item { position: relative; }
+.queue-item .remove { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; min-height: 24px; padding: 0; font-size: 12px; line-height: 1; border-radius: 6px; opacity: 0.6; }
+.queue-item .remove:hover { opacity: 1; color: var(--danger); }
+.queue-more { width: 100%; margin-top: 8px; }
+
+/* ---- Liên hệ */
+.contact-dialog { border: 0; padding: 0; background: transparent; }
+.contact-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+.contact-card { width: min(92vw, 360px); padding: 18px; border-radius: var(--border-radius-md); background: var(--bg-panel); color: inherit; box-shadow: 8px 8px 20px var(--shadow-dark), -6px -6px 16px var(--shadow-light); }
+.contact-card p { margin: 6px 0 12px; font-size: 12px; opacity: 0.85; }
+.contact-links { display: grid; gap: 8px; }
+.contact-links a { display: block; padding: 10px 12px; border-radius: var(--border-radius-md); background: var(--bg-main); color: var(--gold-primary); font-weight: 700; font-size: 12px; text-decoration: none; box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
+.contact-qr { margin: 14px 0 0; text-align: center; }
+.contact-qr img { width: 180px; max-width: 100%; border-radius: 12px; background: #fff; padding: 8px; }
+.contact-qr figcaption { margin-top: 6px; font-size: 11px; opacity: 0.85; }
+.contact-qr.missing { display: none; }

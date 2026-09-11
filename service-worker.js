@@ -1267,15 +1267,15 @@ function crawlPublicVideoLinksInPage(limit, minViews, platform) {
       .replace(/đ/g, "d")
       .replace(/Đ/g, "d")
       .toLowerCase();
-    const match = normalized.match(/(\d+(?:[.,]\d+)?)\s*(k|m|b|wan|yi|nghin|ngan|trieu|ty|万|亿)?\s*(?:views?|luot xem|view|播放|点赞|likes?)?/i);
+    const match = normalized.match(/(\d+(?:[.,]\d+)?)\s*(k|m|b|n|tr|wan|yi|nghin|ngan|trieu|ty|万|亿)?(?![a-z])\s*(?:views?|luot xem|view|播放|点赞|likes?)?/i);
     if (!match || (!match[2] && !/(?:views?|luot xem|view|播放|点赞|likes?)/i.test(match[0]))) return null;
 
     const value = Number.parseFloat(match[1].replace(",", "."));
     if (!Number.isFinite(value) || value <= 0) return null;
     const suffix = String(match[2] || "").toLowerCase();
-    const multiplier = ["k", "nghin", "ngan"].includes(suffix)
+    const multiplier = ["k", "n", "nghin", "ngan"].includes(suffix)
       ? 1000
-      : ["m", "trieu", "wan", "万"].includes(suffix)
+      : ["m", "tr", "trieu", "wan", "万"].includes(suffix)
         ? 1000000
         : ["b", "ty", "yi", "亿"].includes(suffix)
           ? 1000000000
@@ -1339,11 +1339,13 @@ function normalizeInstagramChannelUrl(value) {
     const parts = url.pathname.split("/").filter(Boolean);
     const reserved = new Set(["accounts", "direct", "explore", "p", "reel", "reels", "stories", "tv"]);
     const username = decodeURIComponent(parts[0] || "");
-    if (parts.length !== 1 || reserved.has(username.toLowerCase()) || !/^[a-z0-9._]+$/i.test(username)) return "";
+    // Chấp nhận /username/ hoặc /username/reels/ ; luôn quét trên tab Reels vì trang profile chỉ hiện lưới bài viết.
+    const validTail = parts.length === 1 || (parts.length === 2 && /^(reels|reels\/)$/i.test(parts[1]));
+    if (!validTail || reserved.has(username.toLowerCase()) || !/^[a-z0-9._]+$/i.test(username)) return "";
 
     url.protocol = "https:";
     url.hostname = "www.instagram.com";
-    url.pathname = `/${username}/`;
+    url.pathname = `/${username}/reels/`;
     url.search = "";
     url.hash = "";
     return url.toString();

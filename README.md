@@ -22,7 +22,8 @@ Mike-Autodownload là Chrome Extension Manifest V3 giúp tải hàng loạt vide
 - Hỗ trợ Telegram Web cho video mà Chrome user hiện tại đã đăng nhập và có quyền xem.
 - Tải trực tiếp link video công khai `.mp4`, `.m4v`, `.mov`, `.webm`.
 - Quét trang media đã được cấp quyền để tìm URL video trực tiếp công khai.
-- Quản lý queue, tạm dừng/tiếp tục/dừng, xuất log và lưu file vào thư mục con trong Downloads.
+- Quản lý hàng đợi cho lô lớn: nạp thêm nhiều đợt không trùng, lọc theo trạng thái, bỏ từng link, dọn link đã xong, chỉ vẽ 150 mục mỗi lần; tạm dừng/tiếp tục/dừng, xuất log, lưu file vào thư mục con trong Downloads.
+- Nút Liên hệ (✉) mở Facebook, Gmail và mã QR Telegram của tác giả.
 - Lưu trạng thái job bền vững và phục hồi an toàn khi service worker của MV3 được Chrome tạm dừng.
 
 ## Cài đặt nhanh

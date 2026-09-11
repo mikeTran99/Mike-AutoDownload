@@ -29,6 +29,8 @@ const state = {
   savedReelLinks: [],
   savedReelItems: [],
   channelStats: {},
+  queueFilter: "all",
+  queueLimit: 150,
   lastCrawlSource: "",
   lastCrawlTime: 0,
   running: false,
@@ -62,6 +64,13 @@ const els = {
   themeToggle: document.getElementById("themeToggle"),
   langToggle: document.getElementById("langToggle"),
   statsList: document.getElementById("statsList"),
+  prune: document.getElementById("pruneBtn"),
+  queueFilters: document.getElementById("queueFilters"),
+  queueMore: document.getElementById("queueMoreBtn"),
+  contact: document.getElementById("contactBtn"),
+  contactDialog: document.getElementById("contactDialog"),
+  contactClose: document.getElementById("contactClose"),
+  contactQr: document.getElementById("contactQr"),
   exportStats: document.getElementById("exportStatsBtn"),
   clearStats: document.getElementById("clearStatsBtn"),
   clearData: document.getElementById("clearDataBtn")
@@ -143,6 +152,30 @@ function init() {
   els.themeToggle.addEventListener("click", toggleTheme);
   els.langToggle.addEventListener("click", toggleLang);
   els.exportStats.addEventListener("click", exportStatsCsv);
+  els.prune.addEventListener("click", pruneQueue);
+  els.queueFilters.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-filter]");
+    if (!button) return;
+    state.queueFilter = button.dataset.filter;
+    state.queueLimit = 150;
+    render();
+  });
+  els.queueMore.addEventListener("click", () => {
+    state.queueLimit += 150;
+    render();
+  });
+  els.queue.addEventListener("click", (event) => {
+    const button = event.target.closest("button.remove");
+    if (button) removeQueueItem(button.dataset.id);
+  });
+  els.contact.addEventListener("click", () => els.contactDialog.showModal());
+  els.contactClose.addEventListener("click", () => els.contactDialog.close());
+  els.contactDialog.addEventListener("click", (event) => {
+    if (event.target === els.contactDialog) els.contactDialog.close();
+  });
+  const hideMissingQr = () => els.contactQr.closest("figure").classList.add("missing");
+  els.contactQr.addEventListener("error", hideMissingQr);
+  if (els.contactQr.complete && !els.contactQr.naturalWidth) hideMissingQr();
   els.clearStats.addEventListener("click", clearStats);
   els.clearData.addEventListener("click", clearAllData);
 }
@@ -197,10 +230,43 @@ async function handleFileUpload(event) {
   if (!file) return;
 
   const text = await file.text();
-  const queue = buildQueueFromText(text);
+  const added = appendToQueue(buildQueueFromText(text));
 
-  state.queue = queue;
-  addLog(`Đã nạp ${queue.length} link từ file ${file.name}`, "info");
+  addLog(`Đã nạp ${added.added} link từ file ${file.name}, bỏ qua ${added.duplicates} link trùng`, "info");
+  event.target.value = "";
+  await persist();
+  render();
+}
+
+// Nạp thêm vào hàng đợi hiện có, bỏ link đã có (kể cả đã tải xong) để chạy lô lớn nhiều đợt không trùng.
+function appendToQueue(items) {
+  const known = new Set(state.queue.map((item) => item.link));
+  let added = 0;
+  let duplicates = 0;
+  for (const item of items) {
+    if (known.has(item.link)) {
+      duplicates += 1;
+      continue;
+    }
+    known.add(item.link);
+    state.queue.push(item);
+    added += 1;
+  }
+  return { added, duplicates };
+}
+
+async function removeQueueItem(id) {
+  if (state.running) return;
+  state.queue = state.queue.filter((item) => item.id !== id);
+  await persist();
+  render();
+}
+
+async function pruneQueue() {
+  if (state.running || state.crawling) return;
+  const before = state.queue.length;
+  state.queue = state.queue.filter((item) => item.status !== "success" && item.status !== "unsupported");
+  addLog(`Đã dọn ${before - state.queue.length} link đã xong/không hỗ trợ khỏi hàng đợi.`, "info");
   await persist();
   render();
 }
@@ -215,9 +281,9 @@ async function handleManualImport() {
     return;
   }
 
-  const queue = buildQueueFromText(text);
-  state.queue = queue;
-  addLog(`Đã nạp ${queue.length} link từ ô nhập tay`, "info");
+  const added = appendToQueue(buildQueueFromText(text));
+  addLog(`Đã nạp ${added.added} link từ ô nhập tay, bỏ qua ${added.duplicates} link trùng`, "info");
+  els.manualLinks.value = "";
   await persist();
   render();
 }
@@ -232,7 +298,7 @@ function buildQueueFromLinks(links) {
     const route = detectRoute(link);
     const supported = route && route.status !== "unsupported";
     return {
-      id: `${Date.now()}-${index}`,
+      id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
       link,
       status: supported ? "pending" : "unsupported",
       platform: route?.platform || "unknown",
@@ -580,11 +646,13 @@ function normalizeInstagramChannelUrl(value) {
     const parts = url.pathname.split("/").filter(Boolean);
     const reserved = new Set(["accounts", "direct", "explore", "p", "reel", "reels", "stories", "tv"]);
     const username = decodeURIComponent(parts[0] || "");
-    if (parts.length !== 1 || reserved.has(username.toLowerCase()) || !/^[a-z0-9._]+$/i.test(username)) return "";
+    // Chấp nhận /username/ hoặc /username/reels/ ; luôn quét trên tab Reels vì trang profile chỉ hiện lưới bài viết.
+    const validTail = parts.length === 1 || (parts.length === 2 && /^(reels|reels\/)$/i.test(parts[1]));
+    if (!validTail || reserved.has(username.toLowerCase()) || !/^[a-z0-9._]+$/i.test(username)) return "";
 
     url.protocol = "https:";
     url.hostname = "www.instagram.com";
-    url.pathname = `/${username}/`;
+    url.pathname = `/${username}/reels/`;
     url.search = "";
     url.hash = "";
     return url.toString();
@@ -982,15 +1050,37 @@ async function clearStats() {
 }
 
 function renderQueue() {
-  if (!state.queue.length) {
+  const counts = { all: state.queue.length, pending: 0, running: 0, success: 0, failed: 0 };
+  for (const item of state.queue) {
+    const key = item.status === "unsupported" ? "failed" : item.status;
+    if (key in counts) counts[key] += 1;
+  }
+  for (const button of els.queueFilters.querySelectorAll("button[data-filter]")) {
+    const key = button.dataset.filter;
+    button.classList.toggle("active", key === state.queueFilter);
+    button.textContent = `${t(button.dataset.label || (button.dataset.label = button.textContent.trim()))} ${counts[key]}`;
+  }
+  els.prune.disabled = state.running || state.crawling || !state.queue.some((item) => item.status === "success" || item.status === "unsupported");
+
+  const visible = state.queueFilter === "all"
+    ? state.queue
+    : state.queue.filter((item) => (state.queueFilter === "failed" ? item.status === "failed" || item.status === "unsupported" : item.status === state.queueFilter));
+
+  if (!visible.length) {
     els.queue.className = "queue-list empty";
-    els.queue.textContent = t("Chưa có link nào được tải lên.");
+    els.queue.textContent = t(state.queue.length ? "Không có link nào trong bộ lọc này." : "Chưa có link nào được tải lên.");
+    els.queueMore.hidden = true;
     return;
   }
 
+  // ponytail: chỉ vẽ tối đa queueLimit mục để hàng đợi vài nghìn link không làm treo panel.
+  const shown = visible.slice(0, state.queueLimit);
+  els.queueMore.hidden = shown.length >= visible.length;
+  els.queueMore.textContent = `${t("Xem thêm")} (${visible.length - shown.length})`;
   els.queue.className = "queue-list";
-  els.queue.innerHTML = state.queue.map((item) => `
+  els.queue.innerHTML = shown.map((item) => `
     <article class="queue-item">
+      ${state.running ? "" : `<button class="ghost remove" type="button" data-id="${escapeHtml(item.id)}" title="${escapeHtml(t("Bỏ link này"))}">✕</button>`}
       <strong title="${escapeHtml(item.link)}">${escapeHtml(item.link)}</strong>
       <div class="queue-meta">
         <span class="platform">${escapeHtml(item.platform)}</span>

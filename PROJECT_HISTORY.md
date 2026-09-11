@@ -29,6 +29,11 @@
 - Applied a "Royal Blue & Gold" color scheme for buttons, icons, and headings.
 - Cleaned up the old packaged artifacts from `dist/`.
 
+## 2026-09-11 Queue Management + Instagram Reels + Contact (v1.7.0)
+- Instagram crawl now targets `/username/reels/` (profile grid only lists posts); view parser accepts Vietnamese `N`/`Tr` suffixes with a word boundary so "151 bài viết" is no longer read as 151B.
+- Queue: imports append and dedupe against the existing queue, status filters with counts, per-item remove, prune finished, render cap 150 + "Xem thêm".
+- Contact dialog (native `<dialog>`): Facebook, Gmail, Telegram QR from `assets/telegram-qr.png`.
+
 ## 2026-09-11 Channel Stats Dashboard (v1.6.0)
 - After each crawl the worker reads the profile header (followers/likes via `readProfileHeaderInPage`) and aggregates per-channel stats (`recordChannelStats` → `storage.channelStats`, last 50 channels, 30-point history).
 - Popup panel "Thống kê kênh": followers, videos, total/avg views, top 5 with bars, delta vs previous crawl, CSV export.
