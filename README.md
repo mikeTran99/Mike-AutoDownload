@@ -17,7 +17,8 @@ Mike-Autodownload là Chrome Extension Manifest V3 giúp tải hàng loạt vide
 - Tự phân loại Facebook, TikTok, Instagram, Douyin và tải theo chuỗi dự phòng: đọc URL video ngay trên trang gốc (phiên Chrome đang đăng nhập) → SO9 Downloader → site dự phòng (snaptik.app, ssstik.io, snapsave.app, snapinsta.app, snapdouyin.app). Nguồn nào lỗi tự chuyển nguồn kế tiếp.
 - Quét Facebook Reels, TikTok profile, Instagram profile và Douyin profile, lọc theo số view tối thiểu, hỗ trợ để trống số lượng để lấy toàn bộ video tìm thấy, lưu danh sách đã quét và đưa vào queue tải.
 - YouTube: đọc bản progressive 360p/720p có tiếng từ trang gốc, dự phòng savefrom.net (giới hạn của trình duyệt: không ghép luồng 1080p). Bilibili: qua snapany.com.
-- Thống kê kênh sau mỗi lần quét: follower/subscriber, số video, tổng view, view trung bình, top 5 video theo view, so sánh với lần quét trước; xuất CSV.
+- **Dashboard nghiên cứu kênh** (cho reup & phân tích đối thủ): follower, view trung bình/trung vị, tỉ lệ video viral (≥3× trung vị), nhịp đăng video/tuần, thứ & giờ đăng hiệu quả, hashtag dùng nhiều, top 10 video kèm caption/thumbnail/ngày đăng/view mỗi ngày, đánh dấu video MỚI từ lần quét trước và ĐÃ TẢI; sparkline tăng trưởng; bảng so sánh nhiều kênh; nút "Tải top 10 chưa tải", "Quét lại tất cả"; chế độ **Chỉ thống kê** không đưa vào hàng đợi; xuất CSV đầy đủ.
+- Lịch sử tải: link đã tải thành công được nhớ, nạp lại sẽ tự đánh dấu "Đã tải trước" để không reup trùng.
 - Giao diện song ngữ Việt/Anh, đổi bằng nút EN/VI trên Side Panel và trang Cài đặt.
 - Hỗ trợ Telegram Web cho video mà Chrome user hiện tại đã đăng nhập và có quyền xem.
 - Tải trực tiếp link video công khai `.mp4`, `.m4v`, `.mov`, `.webm`.

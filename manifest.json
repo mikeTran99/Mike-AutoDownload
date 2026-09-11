@@ -3,7 +3,7 @@
   "minimum_chrome_version": "114",
   "name": "Mike-Autodownload",
   "description": "__MSG_appDesc__",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "icons": {
     "16": "icons/mike-16.png",
     "32": "icons/mike-32.png",

@@ -46,6 +46,7 @@
           </div>
         </div>
 
+        <label class="check-row" for="statsOnly"><input id="statsOnly" type="checkbox"> Chỉ thống kê, không đưa vào danh sách tải (nghiên cứu đối thủ)</label>
         <div class="actions crawler-actions">
           <button id="crawlBtn" class="primary" type="button">Quét link video</button>
           <button id="loadSavedBtn" type="button">Tải link đã quét</button>
@@ -110,10 +111,12 @@
         <div class="section-title">
           <h2>Thống kê kênh</h2>
           <div class="hero-buttons">
+            <button id="recrawlAllBtn" class="ghost" type="button" title="Quét lại mọi kênh đã lưu ở chế độ chỉ thống kê">Quét lại tất cả</button>
             <button id="exportStatsBtn" class="ghost" type="button">Xuất CSV</button>
             <button id="clearStatsBtn" class="ghost" type="button">Xóa</button>
           </div>
         </div>
+        <div id="statsCompare" class="stats-compare" hidden></div>
         <div id="statsList" class="stats-list empty">Chưa có thống kê. Quét một kênh để bắt đầu.</div>
       </section>
 
@@ -146,19 +149,24 @@
     </main>
     <dialog id="contactDialog" class="contact-dialog">
       <div class="contact-card">
-        <div class="section-title">
-          <h2>Liên hệ Mike</h2>
+        <div class="contact-profile">
+          <img src="icons/mike-128.png" alt="Mike">
+          <div>
+            <strong>Mike Tran</strong>
+            <small>Tác giả Mike-Autodownload</small>
+          </div>
           <button id="contactClose" class="ghost icon-button" type="button" aria-label="Đóng" title="Đóng">✕</button>
         </div>
-        <p>Góp ý, báo lỗi hoặc đặt tính năng mới cho Mike-Autodownload.</p>
+        <p>Góp ý, báo lỗi hoặc đặt tính năng mới. Mình phản hồi nhanh nhất qua Telegram.</p>
         <div class="contact-links">
-          <a href="https://www.facebook.com/tlmt66/" target="_blank" rel="noopener">Facebook · fb.com/tlmt66</a>
-          <a href="mailto:tlmtrung.ntt.it@gmail.com">Gmail · tlmtrung.ntt.it@gmail.com</a>
+          <a href="https://www.facebook.com/tlmt66/" target="_blank" rel="noopener"><span class="contact-ico">f</span><span><strong>Facebook</strong><small>fb.com/tlmt66</small></span></a>
+          <a href="mailto:tlmtrung.ntt.it@gmail.com?subject=Mike-Autodownload"><span class="contact-ico">@</span><span><strong>Gmail</strong><small>tlmtrung.ntt.it@gmail.com</small></span><button id="copyEmailBtn" class="ghost" type="button" title="Sao chép email">Sao chép</button></a>
         </div>
         <figure class="contact-qr">
           <img id="contactQr" src="assets/telegram-qr.png" alt="Telegram QR">
-          <figcaption>Telegram · quét mã QR để nhắn tin</figcaption>
+          <figcaption><strong>Telegram</strong> · quét mã QR bằng app Telegram để nhắn tin</figcaption>
         </figure>
+        <small class="contact-version">Mike-Autodownload · <span id="contactVersion"></span></small>
       </div>
     </dialog>
     <script type="module" src="popup.js"></script>

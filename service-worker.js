@@ -1,4 +1,5 @@
 import { t } from "./i18n.js";
+import { computeChannelMetrics, postedAtFromLink } from "./analytics.js";
 
 
 const JOB_STATE_KEY = "jobState";
@@ -79,7 +80,7 @@ async function handleMessage(message, sender = {}) {
     crawlLock = true;
     crawlCancelRequested = false;
     try {
-      return await crawlChannelVideos(message.channelUrl, message.maxCount, message.folder, message.minViews);
+      return await crawlChannelVideos(message.channelUrl, message.maxCount, message.folder, message.minViews, { statsOnly: Boolean(message.statsOnly) });
     } catch (error) {
       if (crawlCancelRequested) return { ok: false, error: "Đã dừng quét kênh/profile." };
       throw error;
@@ -330,17 +331,17 @@ async function finishRun(runId, wasStopped = false) {
   if (wasStopped) await publishState();
 }
 
-async function crawlChannelVideos(channelUrl, maxCount, folder, minViews) {
+async function crawlChannelVideos(channelUrl, maxCount, folder, minViews, options = {}) {
   const platform = detectCrawlPlatform(channelUrl);
   let result;
   if (platform === "facebook") {
-    result = await crawlFacebookReels(channelUrl, maxCount, folder, minViews);
+    result = await crawlFacebookReels(channelUrl, maxCount, folder, minViews, options);
   } else if (platform === "tiktok") {
-    result = await crawlTikTokProfile(channelUrl, maxCount, folder, minViews);
+    result = await crawlTikTokProfile(channelUrl, maxCount, folder, minViews, options);
   } else if (platform === "instagram") {
-    result = await crawlInstagramProfile(channelUrl, maxCount, folder, minViews);
+    result = await crawlInstagramProfile(channelUrl, maxCount, folder, minViews, options);
   } else if (platform === "douyin") {
-    result = await crawlDouyinProfile(channelUrl, maxCount, folder, minViews);
+    result = await crawlDouyinProfile(channelUrl, maxCount, folder, minViews, options);
   } else {
     throw new Error("Chỉ hỗ trợ quét kênh Facebook, TikTok, Instagram hoặc Douyin.");
   }
@@ -410,19 +411,52 @@ function readProfileHeaderInPage() {
   };
 }
 
+const MAX_STATS_ITEMS = 200;
+const MAX_DOWNLOAD_HISTORY = 5000;
+
+// Lịch sử link đã tải thành công: để dashboard đánh dấu "chưa tải" và import bỏ qua link đã reup.
+async function rememberDownloaded(link, filename) {
+  const data = await chrome.storage.local.get(["downloadHistory"]);
+  const history = data.downloadHistory || {};
+  history[link] = { time: Date.now(), filename: filename || "" };
+  const keys = Object.keys(history);
+  if (keys.length > MAX_DOWNLOAD_HISTORY) {
+    for (const key of keys.sort((a, b) => history[a].time - history[b].time).slice(0, keys.length - MAX_DOWNLOAD_HISTORY)) delete history[key];
+  }
+  await chrome.storage.local.set({ downloadHistory: history });
+}
+
 async function recordChannelStats(sourceUrl, platform, result) {
-  const items = Array.isArray(result.items) ? result.items : [];
-  const withViews = items.filter((item) => Number(item.views) > 0);
-  const totalViews = withViews.reduce((sum, item) => sum + Number(item.views), 0);
-  const top = [...withViews].sort((a, b) => b.views - a.views).slice(0, 5)
-    .map((item) => ({ link: item.link, views: item.views, viewText: item.viewText || "" }));
   const profile = result.profile || {};
   const time = result.lastCrawlTime || Date.now();
-
-  const data = await chrome.storage.local.get(["channelStats"]);
+  const data = await chrome.storage.local.get(["channelStats", "downloadHistory"]);
   const stats = data.channelStats || {};
   const previous = stats[sourceUrl] || {};
-  const history = [...(previous.history || []), { time, followers: profile.followers || 0, totalViews, videoCount: items.length }].slice(-MAX_STATS_HISTORY);
+
+  const items = (Array.isArray(result.items) ? result.items : []).slice(0, MAX_STATS_ITEMS).map((item) => ({
+    link: item.link,
+    views: Number(item.views) || 0,
+    viewText: item.viewText || "",
+    caption: String(item.caption || "").slice(0, 120),
+    thumbnail: item.thumbnail || "",
+    postedAt: postedAtFromLink(item.link, platform)
+  }));
+  const metrics = computeChannelMetrics(items, {
+    previousLinks: new Set((previous.items || []).map((item) => item.link)),
+    downloadedLinks: new Set(Object.keys(data.downloadHistory || {})),
+    now: time
+  });
+  // ponytail: chỉ giữ thumbnail cho top 10 để 50 kênh × 200 video không vượt quota storage.
+  const topLinks = new Set(metrics.top.map((item) => item.link));
+  for (const item of items) if (!topLinks.has(item.link)) item.thumbnail = "";
+
+  const history = [...(previous.history || []), {
+    time,
+    followers: profile.followers || previous.followers || 0,
+    totalViews: metrics.totalViews,
+    avgViews: metrics.avgViews,
+    videoCount: items.length
+  }].slice(-MAX_STATS_HISTORY);
 
   stats[sourceUrl] = {
     sourceUrl,
@@ -433,9 +467,11 @@ async function recordChannelStats(sourceUrl, platform, result) {
     likes: profile.likes || previous.likes || 0,
     likesText: profile.likesText || previous.likesText || "",
     videoCount: items.length,
-    totalViews,
-    avgViews: withViews.length ? Math.round(totalViews / withViews.length) : 0,
-    top,
+    totalViews: metrics.totalViews,
+    avgViews: metrics.avgViews,
+    top: metrics.top,
+    metrics,
+    items,
     lastCrawlTime: time,
     history
   };
@@ -452,7 +488,8 @@ function assertCrawlActive() {
   if (crawlCancelRequested) throw new Error("CRAWL_STOPPED: Đã dừng quét kênh/profile.");
 }
 
-async function crawlFacebookReels(channelUrl, maxCount, folder, minViews) {
+async function crawlFacebookReels(channelUrl, maxCount, folder, minViews, options = {}) {
+  const statsOnly = Boolean(options.statsOnly);
   const sourceUrl = normalizeFacebookChannelUrl(channelUrl);
   const limit = normalizeMaxCount(maxCount);
   const minimumViews = normalizeMinViews(minViews);
@@ -516,15 +553,19 @@ async function crawlFacebookReels(channelUrl, maxCount, folder, minViews) {
       lastCrawlMax: limit,
       lastMinViews: minimumViews,
       lastCrawlPlatform: "facebook",
-      queue
+      ...(statsOnly ? {} : { queue })
     });
 
     await appendLog(`Đã lấy được ${links.length} link Reels, bỏ qua ${skipped} link trùng/không hợp lệ.`, "info");
     await appendLog(`Đã bỏ qua ${skippedByView} video dưới ngưỡng view.`, "info");
     await appendLog(`${missingView} video không đọc được view.`, minimumViews > 0 && missingView > 0 ? "warn" : "info");
-    await appendLog(`Đã đưa ${queue.length} link Facebook vào danh sách tải.`, "info");
+    if (!statsOnly) await appendLog(`Đã đưa ${queue.length} link Facebook vào danh sách tải.`, \"info\");
     assertCrawlActive();
-    await startRunQueueAfterCrawl(folder);
+    if (statsOnly) {
+      await appendLog("Chế độ chỉ thống kê: không đưa link vào danh sách tải.", "info");
+    } else {
+      await startRunQueueAfterCrawl(folder);
+    }
     return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime, profile };
   } catch (error) {
     await appendLog(`Quét kênh thất bại: ${error.message || error}`, "error");
@@ -539,7 +580,8 @@ async function crawlFacebookReels(channelUrl, maxCount, folder, minViews) {
   }
 }
 
-async function crawlTikTokProfile(channelUrl, maxCount, folder, minViews) {
+async function crawlTikTokProfile(channelUrl, maxCount, folder, minViews, options = {}) {
+  const statsOnly = Boolean(options.statsOnly);
   const sourceUrl = normalizeTikTokChannelUrl(channelUrl);
   const limit = normalizeMaxCount(maxCount);
   const minimumViews = normalizeMinViews(minViews);
@@ -603,15 +645,19 @@ async function crawlTikTokProfile(channelUrl, maxCount, folder, minViews) {
       lastCrawlMax: limit,
       lastMinViews: minimumViews,
       lastCrawlPlatform: "tiktok",
-      queue
+      ...(statsOnly ? {} : { queue })
     });
 
     await appendLog(`Đã lấy được ${links.length} link TikTok, bỏ qua ${skipped} link trùng/không hợp lệ.`, "info");
     await appendLog(`Đã bỏ qua ${skippedByView} video TikTok dưới ngưỡng view.`, "info");
     await appendLog(`${missingView} video TikTok không đọc được view.`, minimumViews > 0 && missingView > 0 ? "warn" : "info");
-    await appendLog(`Đã đưa ${queue.length} link TikTok vào danh sách tải.`, "info");
+    if (!statsOnly) await appendLog(`Đã đưa ${queue.length} link TikTok vào danh sách tải.`, \"info\");
     assertCrawlActive();
-    await startRunQueueAfterCrawl(folder);
+    if (statsOnly) {
+      await appendLog("Chế độ chỉ thống kê: không đưa link vào danh sách tải.", "info");
+    } else {
+      await startRunQueueAfterCrawl(folder);
+    }
     return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime, profile };
   } catch (error) {
     await appendLog(`Quét kênh TikTok thất bại: ${error.message || error}`, "error");
@@ -626,13 +672,15 @@ async function crawlTikTokProfile(channelUrl, maxCount, folder, minViews) {
   }
 }
 
-async function crawlInstagramProfile(channelUrl, maxCount, folder, minViews) {
+async function crawlInstagramProfile(channelUrl, maxCount, folder, minViews, options = {}) {
+  const statsOnly = Boolean(options.statsOnly);
   const sourceUrl = normalizeInstagramChannelUrl(channelUrl);
   if (!sourceUrl) {
     throw new Error("Link profile Instagram không hợp lệ.");
   }
 
   return await crawlPublicProfile({
+    statsOnly,
     sourceUrl,
     maxCount,
     folder,
@@ -647,13 +695,15 @@ async function crawlInstagramProfile(channelUrl, maxCount, folder, minViews) {
   });
 }
 
-async function crawlDouyinProfile(channelUrl, maxCount, folder, minViews) {
+async function crawlDouyinProfile(channelUrl, maxCount, folder, minViews, options = {}) {
+  const statsOnly = Boolean(options.statsOnly);
   const sourceUrl = normalizeDouyinChannelUrl(channelUrl);
   if (!sourceUrl) {
     throw new Error("Link profile Douyin không hợp lệ.");
   }
 
   return await crawlPublicProfile({
+    statsOnly,
     sourceUrl,
     maxCount,
     folder,
@@ -669,6 +719,7 @@ async function crawlDouyinProfile(channelUrl, maxCount, folder, minViews) {
 }
 
 async function crawlPublicProfile({
+  statsOnly = false,
   sourceUrl,
   maxCount,
   folder,
@@ -738,15 +789,19 @@ async function crawlPublicProfile({
       lastCrawlMax: limit,
       lastMinViews: minimumViews,
       lastCrawlPlatform: platform,
-      queue
+      ...(statsOnly ? {} : { queue })
     });
 
     await appendLog(`Đã lấy được ${links.length} ${itemLabel}, bỏ qua ${skipped} link trùng/không hợp lệ.`, "info");
     await appendLog(`Đã bỏ qua ${skippedByView} video dưới ngưỡng view.`, "info");
     await appendLog(`${missingView} video không đọc được view.`, minimumViews > 0 && missingView > 0 ? "warn" : "info");
-    await appendLog(`Đã đưa ${queue.length} link ${label} vào danh sách tải.`, "info");
+    if (!statsOnly) await appendLog(`Đã đưa ${queue.length} link ${label} vào danh sách tải.`, \"info\");
     assertCrawlActive();
-    await startRunQueueAfterCrawl(folder);
+    if (statsOnly) {
+      await appendLog("Chế độ chỉ thống kê: không đưa link vào danh sách tải.", "info");
+    } else {
+      await startRunQueueAfterCrawl(folder);
+    }
     return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime, profile };
   } catch (error) {
     await appendLog(`Quét profile ${label} thất bại: ${error.message || error}`, "error");
@@ -833,6 +888,8 @@ function crawlFacebookReelsInPage(limit, minViews) {
           link: normalized,
           views,
           viewText: viewInfo?.viewText || "",
+          caption: String(anchor.querySelector("img")?.getAttribute("alt") || anchor.getAttribute("aria-label") || "").slice(0, 160),
+          thumbnail: anchor.querySelector("img")?.currentSrc || anchor.querySelector("img")?.src || "",
           platform: "facebook",
           downloaderUrl: "https://so9.vn/9downloader/facebook"
         });
@@ -1018,6 +1075,8 @@ function crawlTikTokVideosInPage(limit, minViews) {
           link: normalized,
           views,
           viewText: viewInfo?.viewText || "",
+          caption: String(anchor.querySelector("img")?.getAttribute("alt") || anchor.getAttribute("aria-label") || "").slice(0, 160),
+          thumbnail: anchor.querySelector("img")?.currentSrc || anchor.querySelector("img")?.src || "",
           platform: "tiktok",
           downloaderUrl: "https://so9.vn/9downloader/tiktok"
         });
@@ -1193,6 +1252,8 @@ function crawlPublicVideoLinksInPage(limit, minViews, platform) {
           link: normalized,
           views,
           viewText: viewInfo?.viewText || "",
+          caption: String(anchor.querySelector("img")?.getAttribute("alt") || anchor.getAttribute("aria-label") || "").slice(0, 160),
+          thumbnail: anchor.querySelector("img")?.currentSrc || anchor.querySelector("img")?.src || "",
           platform,
           downloaderUrl: platform === "instagram"
             ? "https://so9.vn/9downloader/insta"
@@ -1456,6 +1517,7 @@ async function runQueue(folder, runId) {
         status: "success",
         message: result.filename ? `Đã tải: ${result.filename}` : "Đã hoàn tất"
       });
+      await rememberDownloaded(item.link, result.filename);
       await appendLog(`Thành công: ${item.link}`, "info");
     } catch (error) {
       if (stopped || currentJob.cancelRequested || currentJob.runId !== runId) {
@@ -1513,6 +1575,7 @@ async function recoverActiveItem(item, downloadFolder, timeoutMs, runId) {
         status: "success",
         message: result.filename ? `Đã tải: ${result.filename}` : "Đã hoàn tất"
       });
+      await rememberDownloaded(item.link, result.filename);
       await appendLog(`Đã phục hồi download thành công: ${item.link}`, "info");
       await untrackActiveDownload(downloadId);
       return { handled: true };
@@ -1550,6 +1613,7 @@ async function recoverActiveItem(item, downloadFolder, timeoutMs, runId) {
           status: "success",
           message: result.filename ? `Đã tải: ${result.filename}` : "Đã hoàn tất"
         });
+        await rememberDownloaded(item.link, result.filename);
         await appendLog(`Đã phục hồi download fallback: ${item.link}`, "info");
       } catch (error) {
         await updateItem(item.id, { status: "failed", message: formatDownloadError(error) });

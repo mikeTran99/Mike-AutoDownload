@@ -287,9 +287,20 @@ Trạng thái job đang chạy được lưu cục bộ để service worker có
 - YouTube chỉ tải được bản 360p (đôi khi 720p) có tiếng vì trình duyệt không ghép luồng hình/tiếng riêng; muốn 1080p cần công cụ desktop.
 - Nút **EN/VI** ở góc trên Side Panel và trang Cài đặt đổi ngôn ngữ toàn bộ giao diện, kể cả log đã ghi.
 
-## 23. Thống kê kênh
+## 23. Dashboard nghiên cứu kênh (reup & đối thủ)
 
-Sau mỗi lần **Quét link video**, bảng **Thống kê kênh** hiện: số follower/subscriber đọc trên trang kênh, số video quét được, tổng view, view trung bình, top 5 video nhiều view nhất (bấm để mở) và mức tăng/giảm so với lần quét trước của cùng kênh. Quét lại định kỳ để theo dõi tăng trưởng. **Xuất CSV** lưu toàn bộ kênh đã thống kê; **Xóa** xoá thống kê (không ảnh hưởng danh sách tải).
+Sau mỗi lần **Quét link video**, mỗi kênh có một thẻ trong **Thống kê kênh**:
+
+- **Follower / View TB / Trung vị / Video quét**, kèm sparkline tăng trưởng khi đã quét ≥2 lần.
+- **Viral ≥3×**: số video có view ≥ 3 lần trung vị của kênh — đây là video "nổi bật bất thường", đáng reup nhất. Mỗi video top hiện hệ số ×N.
+- **Video/tuần**, **Đăng hiệu quả** (thứ + giờ có view trung bình cao nhất) — tính từ ngày đăng giải mã trong ID video (TikTok, Douyin, Instagram; Facebook không có).
+- **Hashtag** dùng nhiều nhất trong caption → ý tưởng từ khoá.
+- **Top 10** video: caption, thumbnail, ngày đăng, view/ngày, nhãn **MỚI** (chưa có ở lần quét trước) và **ĐÃ TẢI**.
+- **Tải top 10 chưa tải**: đưa các video top chưa từng tải vào hàng đợi (không tự chạy). **Quét lại** cập nhật kênh đó; **Quét lại tất cả** cập nhật cả danh sách theo dõi.
+- Tick **Chỉ thống kê, không đưa vào danh sách tải** khi chỉ muốn theo dõi đối thủ.
+- Bảng **so sánh** hiện khi có ≥2 kênh. **Xuất CSV** gồm toàn bộ chỉ số + top 3 kèm caption.
+
+Lịch sử tải: mọi link tải thành công được nhớ; nạp lại file có link cũ sẽ tự đánh dấu **Đã tải trước** và bị bỏ qua khi chạy (dùng ✕ hoặc Xóa để tải lại).
 
 ## 24. Hàng đợi lớn
 

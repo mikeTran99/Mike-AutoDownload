@@ -29,6 +29,12 @@
 - Applied a "Royal Blue & Gold" color scheme for buttons, icons, and headings.
 - Cleaned up the old packaged artifacts from `dist/`.
 
+## 2026-09-11 Research Dashboard (v1.8.0)
+- `analytics.js`: posted time decoded from TikTok/Douyin/Instagram ids, median/outlier (viral ≥3×), views/day, posts per week, best weekday/hour, hashtag frequency, sparkline SVG.
+- Crawlers capture caption (img alt) + thumbnail; `channelStats` keeps up to 200 items/channel with metrics; `downloadHistory` recorded on every success and used for "chưa tải" badges and import skipping (`skipped` status).
+- Stats-only crawl mode (no queue/auto-download), re-crawl one/all channels, queue top 10 not downloaded, compare table, richer CSV.
+- Contact dialog redesigned (avatar, Facebook, Gmail + copy, Telegram QR, version).
+
 ## 2026-09-11 Queue Management + Instagram Reels + Contact (v1.7.0)
 - Instagram crawl now targets `/username/reels/` (profile grid only lists posts); view parser accepts Vietnamese `N`/`Tr` suffixes with a word boundary so "151 bài viết" is no longer read as 151B.
 - Queue: imports append and dedupe against the existing queue, status filters with counts, per-item remove, prune finished, render cap 150 + "Xem thêm".

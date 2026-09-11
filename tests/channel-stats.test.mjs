@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readProjectFile, extractFunction } from "./helpers/project.mjs";
+import { computeChannelMetrics, postedAtFromLink } from "../analytics.js";
 
 function fakeDocument({ host, selectors = {}, meta = {}, bodyText = "" }) {
   const el = (textContent) => (textContent === undefined ? null : { textContent, getAttribute: () => null });
@@ -46,7 +47,10 @@ test("channel stats aggregate views, keep top 5 and a bounded history", async ()
   const ctx = {
     chrome: { storage: { local: { get: async () => ({ channelStats: store.channelStats }), set: async (patch) => Object.assign(store, patch) } } },
     MAX_CHANNEL_STATS: 50,
-    MAX_STATS_HISTORY: 30
+    MAX_STATS_HISTORY: 30,
+    MAX_STATS_ITEMS: 200,
+    computeChannelMetrics,
+    postedAtFromLink
   };
   const record = vm.runInNewContext(`(async function (sourceUrl, platform, result) { ${extractFunction(source, "recordChannelStats")} })`, ctx);
   const items = Array.from({ length: 8 }, (_, i) => ({ link: `https://t/v${i}`, views: (i + 1) * 1000, viewText: `${i + 1}K` }));
@@ -58,7 +62,10 @@ test("channel stats aggregate views, keep top 5 and a bounded history", async ()
   assert.equal(entry.videoCount, 8);
   assert.equal(entry.totalViews, 36000);
   assert.equal(entry.avgViews, 4500);
-  assert.equal(entry.top.map((video) => video.views).join(","), "8000,7000,6000,5000,4000");
+  assert.equal(entry.top.slice(0, 5).map((video) => video.views).join(","), "8000,7000,6000,5000,4000");
+  assert.equal(entry.items.length, 8);
+  assert.equal(entry.metrics.medianViews, 4500);
+  assert.equal(entry.metrics.newCount, 0, "second crawl of the same links adds no new videos");
   assert.equal(entry.followers, 650);
   assert.equal(entry.history.length, 2);
   assert.equal(entry.history[0].followers, 500);

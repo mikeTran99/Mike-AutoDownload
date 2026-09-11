@@ -1,4 +1,5 @@
 import { t, initLang, setLang, getLang, applyDom } from "./i18n.js";
+import { formatCompact, sparklineSvg, VIRAL_MULTIPLIER } from "./analytics.js";
 
 const ROUTES = [
   { platform: "facebook", strategy: "so9", hosts: ["facebook.com", "fb.watch"], url: "https://so9.vn/9downloader/facebook" },
@@ -29,6 +30,7 @@ const state = {
   savedReelLinks: [],
   savedReelItems: [],
   channelStats: {},
+  downloadHistory: {},
   queueFilter: "all",
   queueLimit: 150,
   lastCrawlSource: "",
@@ -71,6 +73,11 @@ const els = {
   contactDialog: document.getElementById("contactDialog"),
   contactClose: document.getElementById("contactClose"),
   contactQr: document.getElementById("contactQr"),
+  copyEmail: document.getElementById("copyEmailBtn"),
+  contactVersion: document.getElementById("contactVersion"),
+  statsOnly: document.getElementById("statsOnly"),
+  statsCompare: document.getElementById("statsCompare"),
+  recrawlAll: document.getElementById("recrawlAllBtn"),
   exportStats: document.getElementById("exportStatsBtn"),
   clearStats: document.getElementById("clearStatsBtn"),
   clearData: document.getElementById("clearDataBtn")
@@ -91,11 +98,16 @@ function init() {
     "savedReelLinks",
     "savedReelItems",
     "channelStats",
+    "downloadHistory",
+    "lastStatsOnly",
     "lastCrawlSource",
     "lastCrawlTime",
     "lastCrawlMax",
     "lastMinViews"
   ], (data) => {
+    state.downloadHistory = data.downloadHistory || {};
+    els.statsOnly.checked = Boolean(data.lastStatsOnly);
+    els.contactVersion.textContent = `v${chrome.runtime.getManifest().version}`;
     els.folder.value = data.downloadFolder || "SO9-Downloads";
     els.channelUrl.value = data.lastCrawlSource || "";
     els.maxReels.value = data.lastCrawlMax === null || data.lastCrawlMax === undefined || data.lastCrawlMax === ""
@@ -129,6 +141,7 @@ function init() {
     if (changes.savedReelLinks) state.savedReelLinks = changes.savedReelLinks.newValue || [];
     if (changes.savedReelItems) state.savedReelItems = changes.savedReelItems.newValue || [];
     if (changes.channelStats) state.channelStats = changes.channelStats.newValue || {};
+    if (changes.downloadHistory) state.downloadHistory = changes.downloadHistory.newValue || {};
     if (changes.lastCrawlSource) state.lastCrawlSource = changes.lastCrawlSource.newValue || "";
     if (changes.lastCrawlTime) state.lastCrawlTime = changes.lastCrawlTime.newValue || 0;
     if (changes.runState) {
@@ -153,6 +166,20 @@ function init() {
   els.langToggle.addEventListener("click", toggleLang);
   els.exportStats.addEventListener("click", exportStatsCsv);
   els.prune.addEventListener("click", pruneQueue);
+  els.statsOnly.addEventListener("change", () => chrome.storage.local.set({ lastStatsOnly: els.statsOnly.checked }));
+  els.recrawlAll.addEventListener("click", recrawlAllChannels);
+  els.statsList.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    if (button.dataset.action === "queue-top") queueTopFromChannel(button.dataset.source);
+    if (button.dataset.action === "recrawl") recrawlChannel(button.dataset.source);
+  });
+  els.copyEmail.addEventListener("click", async (event) => {
+    event.preventDefault();
+    await navigator.clipboard.writeText("tlmtrung.ntt.it@gmail.com").catch(() => {});
+    els.copyEmail.textContent = t("Đã sao chép");
+    setTimeout(() => { els.copyEmail.textContent = t("Sao chép"); }, 1500);
+  });
   els.queueFilters.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-filter]");
     if (!button) return;
@@ -265,7 +292,7 @@ async function removeQueueItem(id) {
 async function pruneQueue() {
   if (state.running || state.crawling) return;
   const before = state.queue.length;
-  state.queue = state.queue.filter((item) => item.status !== "success" && item.status !== "unsupported");
+  state.queue = state.queue.filter((item) => !["success", "unsupported", "skipped"].includes(item.status));
   addLog(`Đã dọn ${before - state.queue.length} link đã xong/không hỗ trợ khỏi hàng đợi.`, "info");
   await persist();
   render();
@@ -297,16 +324,17 @@ function buildQueueFromLinks(links) {
   const queue = links.map((link, index) => {
     const route = detectRoute(link);
     const supported = route && route.status !== "unsupported";
+    const downloadedBefore = supported && Boolean(state.downloadHistory[link]);
     return {
       id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
       link,
-      status: supported ? "pending" : "unsupported",
+      status: downloadedBefore ? "skipped" : supported ? "pending" : "unsupported",
       platform: route?.platform || "unknown",
       strategy: route?.strategy || "",
       downloaderUrl: route?.url || "",
       telegramWebUrl: route?.telegramWebUrl || "",
       permissionOrigin: route?.permissionOrigin || "",
-      message: route?.message || (supported ? "Chờ xử lý" : "Không hỗ trợ domain này")
+      message: downloadedBefore ? "Đã tải trước đó, bỏ qua" : route?.message || (supported ? "Chờ xử lý" : "Không hỗ trợ domain này")
     };
   });
   return queue;
@@ -377,7 +405,8 @@ async function crawlChannelVideos() {
       channelUrl: channel.url,
       maxCount,
       minViews,
-      folder
+      folder,
+      statsOnly: els.statsOnly.checked
     });
 
     if (!response?.ok) {
@@ -393,7 +422,9 @@ async function crawlChannelVideos() {
     state.queue = latest.queue || buildQueueFromReelItems(state.savedReelItems);
     state.running = latest.runState?.running || false;
     state.paused = latest.runState?.paused || false;
-    addLog(`Đã đưa ${state.queue.length} link ${channel.label} vào danh sách tải.`, "info");
+    addLog(els.statsOnly.checked
+      ? `Đã thống kê ${state.savedReelItems.length} video của kênh ${channel.label}.`
+      : `Đã đưa ${state.queue.length} link ${channel.label} vào danh sách tải.`, "info");
     await chrome.storage.local.set({ logs: state.logs });
   } catch (error) {
     const message = error.message || String(error);
@@ -962,49 +993,146 @@ function sortedStats() {
   return Object.values(state.channelStats || {}).sort((a, b) => (b.lastCrawlTime || 0) - (a.lastCrawlTime || 0));
 }
 
+const WEEKDAYS = ["CN", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+
 function renderStats() {
   const channels = sortedStats();
+  els.exportStats.disabled = !channels.length;
+  els.clearStats.disabled = !channels.length;
+  els.recrawlAll.disabled = !channels.length || state.running || state.crawling;
+  renderCompare(channels);
+
   if (!channels.length) {
     els.statsList.className = "stats-list empty";
     els.statsList.textContent = t("Chưa có thống kê. Quét một kênh để bắt đầu.");
-    els.exportStats.disabled = true;
-    els.clearStats.disabled = true;
     return;
   }
 
-  els.exportStats.disabled = false;
-  els.clearStats.disabled = false;
   els.statsList.className = "stats-list";
-  els.statsList.innerHTML = channels.map((channel) => {
-    const maxTop = channel.top?.[0]?.views || 1;
-    const top = (channel.top || []).map((video, index) => `
-      <a href="${escapeHtml(video.link)}" target="_blank" rel="noopener" title="${escapeHtml(video.link)}">
-        <i>#${index + 1}</i>
-        <span class="bar"><b style="width:${Math.max(4, Math.round(video.views / maxTop * 100))}%"></b><em>${escapeHtml(shortLink(video.link))}</em></span>
-        <span>${escapeHtml(video.viewText || formatNumber(video.views))}</span>
-      </a>`).join("");
-    const previous = channel.history?.length > 1 ? channel.history[channel.history.length - 2] : null;
-    const trend = previous ? `
-      <div class="stats-trend">${escapeHtml(t("So với lần quét trước:"))}
-        ${trendChip(channel.followers - previous.followers, t("follower"))}
-        ${trendChip(channel.totalViews - previous.totalViews, t("view"))}
-      </div>` : "";
-    return `
-      <article class="stats-card">
-        <div class="stats-head">
-          <strong><a href="${escapeHtml(channel.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(channel.name || channel.sourceUrl)}</a></strong>
-          <span class="platform">${escapeHtml(channel.platform)} · ${new Date(channel.lastCrawlTime).toLocaleDateString()}</span>
-        </div>
-        <div class="stats-grid">
-          <div><span>${escapeHtml(channel.followersText || (channel.followers ? formatNumber(channel.followers) : "—"))}</span><small>${escapeHtml(t("Follower"))}</small></div>
-          <div><span>${channel.videoCount}</span><small>${escapeHtml(t("Video quét"))}</small></div>
-          <div><span>${escapeHtml(formatNumber(channel.totalViews))}</span><small>${escapeHtml(t("Tổng view"))}</small></div>
-          <div><span>${escapeHtml(formatNumber(channel.avgViews))}</span><small>${escapeHtml(t("View TB"))}</small></div>
-        </div>
-        <div class="stats-top">${top || `<small>${escapeHtml(t("Không đọc được view của video nào."))}</small>`}</div>
-        ${trend}
-      </article>`;
+  els.statsList.innerHTML = channels.map(renderChannelCard).join("");
+}
+
+function renderCompare(channels) {
+  els.statsCompare.hidden = channels.length < 2;
+  if (channels.length < 2) return;
+  const rows = [...channels].sort((a, b) => (b.metrics?.avgViews || 0) - (a.metrics?.avgViews || 0)).map((channel) => {
+    const m = channel.metrics || {};
+    return `<tr>
+      <td title="${escapeHtml(channel.sourceUrl)}">${escapeHtml(channel.name || channel.sourceUrl)}</td>
+      <td>${escapeHtml(channel.followersText || (channel.followers ? formatCompact(channel.followers) : "—"))}</td>
+      <td>${formatCompact(m.avgViews || 0)}</td>
+      <td>${formatCompact(m.medianViews || 0)}</td>
+      <td>${m.viralRate || 0}%</td>
+      <td>${m.postsPerWeek || "—"}</td>
+      <td>${m.newCount || 0}</td>
+    </tr>`;
   }).join("");
+  els.statsCompare.innerHTML = `<table>
+    <thead><tr>
+      <th>${escapeHtml(t("Kênh"))}</th><th>${escapeHtml(t("Follower"))}</th><th>${escapeHtml(t("View TB"))}</th>
+      <th>${escapeHtml(t("Trung vị"))}</th><th>${escapeHtml(t("Viral"))}</th><th>${escapeHtml(t("Video/tuần"))}</th><th>${escapeHtml(t("Mới"))}</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderChannelCard(channel) {
+  const m = channel.metrics || { top: channel.top || [], hashtags: [] };
+  const followerHistory = (channel.history || []).map((point) => point.followers).filter((value) => value > 0);
+  const viewHistory = (channel.history || []).map((point) => point.avgViews ?? point.totalViews).filter((value) => value > 0);
+  const previous = channel.history?.length > 1 ? channel.history[channel.history.length - 2] : null;
+  const maxTop = m.top?.[0]?.views || 1;
+  const insights = [];
+  if (m.bestWeekday) insights.push(`📅 ${t("Đăng hiệu quả")}: ${t(WEEKDAYS[m.bestWeekday.key])}${m.bestHour ? ` · ${m.bestHour.key}h` : ""} (${t("TB")} ${formatCompact(m.bestWeekday.avgViews)} view)`);
+  if (m.postsPerWeek) insights.push(`⏱ ${m.postsPerWeek} ${t("video/tuần")}`);
+  if (channel.likesText) insights.push(`❤ ${escapeHtml(channel.likesText)} ${t("lượt thích")}`);
+  for (const tag of m.hashtags || []) insights.push(`${escapeHtml(tag.tag)} ×${tag.count}`);
+
+  const top = (m.top || []).map((video, index) => `
+    <a href="${escapeHtml(video.link)}" target="_blank" rel="noopener" title="${escapeHtml(video.caption || video.link)}">
+      <i>#${index + 1}</i>
+      ${video.thumbnail ? `<img class="thumb" src="${escapeHtml(video.thumbnail)}" alt="" loading="lazy">` : `<span class="thumb"></span>`}
+      <span class="cap">
+        <em>${escapeHtml(video.caption || shortLink(video.link))}</em>
+        <span class="bar"><b style="width:${Math.max(3, Math.round((video.views || 0) / maxTop * 100))}%"></b></span>
+        <span class="meta">${video.postedAt ? escapeHtml(relativeTime(video.postedAt)) : ""}${video.viewsPerDay ? ` · ${formatCompact(video.viewsPerDay)} view/${t("ngày")}` : ""}${video.isNew ? `<span class="badge new">${t("MỚI")}</span>` : ""}${video.downloaded ? `<span class="badge done">${t("ĐÃ TẢI")}</span>` : ""}</span>
+      </span>
+      <span class="views">${escapeHtml(video.viewText || formatCompact(video.views))}${video.outlier >= VIRAL_MULTIPLIER ? `<span class="badge viral">×${video.outlier}</span>` : video.outlier ? `<small>×${video.outlier}</small>` : ""}</span>
+    </a>`).join("");
+
+  return `
+    <article class="stats-card">
+      <div class="stats-head">
+        <strong><a href="${escapeHtml(channel.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(channel.name || channel.sourceUrl)}</a></strong>
+        <span class="platform">${escapeHtml(channel.platform)} · ${new Date(channel.lastCrawlTime).toLocaleDateString()}</span>
+      </div>
+      <div class="stats-kpis">
+        <div><span>${escapeHtml(channel.followersText || (channel.followers ? formatCompact(channel.followers) : "—"))}</span><small>${escapeHtml(t("Follower"))}</small>${sparklineSvg(followerHistory, { width: 60, height: 18 })}</div>
+        <div><span>${formatCompact(m.avgViews || 0)}</span><small>${escapeHtml(t("View TB"))}</small>${sparklineSvg(viewHistory, { width: 60, height: 18 })}</div>
+        <div><span>${formatCompact(m.medianViews || 0)}</span><small>${escapeHtml(t("Trung vị"))}</small></div>
+        <div><span>${m.videoCount || channel.videoCount || 0}</span><small>${escapeHtml(t("Video quét"))}</small></div>
+        <div class="hot"><span>${m.viralCount || 0}</span><small>${escapeHtml(t("Viral"))} ≥${VIRAL_MULTIPLIER}× (${m.viralRate || 0}%)</small></div>
+        <div><span>${m.postsPerWeek || "—"}</span><small>${escapeHtml(t("Video/tuần"))}</small></div>
+        <div class="fresh"><span>${m.newCount || 0}</span><small>${escapeHtml(t("Mới từ lần trước"))}</small></div>
+        <div><span>${m.notDownloadedCount ?? "—"}</span><small>${escapeHtml(t("Chưa tải"))}</small></div>
+      </div>
+      ${insights.length ? `<div class="stats-insight">${insights.map((text) => `<span class="chip">${text}</span>`).join("")}</div>` : ""}
+      <div class="stats-top">${top || `<small>${escapeHtml(t("Không đọc được view của video nào."))}</small>`}</div>
+      ${previous ? `<div class="stats-trend">${escapeHtml(t("So với lần quét trước:"))} ${trendChip(channel.followers - (previous.followers || 0), t("follower"))} ${trendChip((m.avgViews || 0) - (previous.avgViews || 0), t("view TB"))}</div>` : ""}
+      <div class="stats-actions">
+        <button type="button" class="primary" data-action="queue-top" data-source="${escapeHtml(channel.sourceUrl)}" ${state.running ? "disabled" : ""}>${escapeHtml(t("Tải top 10 chưa tải"))}</button>
+        <button type="button" data-action="recrawl" data-source="${escapeHtml(channel.sourceUrl)}" ${state.running || state.crawling ? "disabled" : ""}>${escapeHtml(t("Quét lại"))}</button>
+      </div>
+    </article>`;
+}
+
+function relativeTime(timestamp) {
+  const days = Math.floor((Date.now() - timestamp) / 86400000);
+  if (days < 1) return t("hôm nay");
+  if (days < 30) return `${days} ${t("ngày trước")}`;
+  if (days < 365) return `${Math.floor(days / 30)} ${t("tháng trước")}`;
+  return `${Math.floor(days / 365)} ${t("năm trước")}`;
+}
+
+async function queueTopFromChannel(sourceUrl) {
+  const channel = state.channelStats[sourceUrl];
+  if (!channel || state.running) return;
+  const picks = (channel.metrics?.top || channel.top || [])
+    .filter((video) => video.views > 0 && !state.downloadHistory[video.link])
+    .slice(0, 10)
+    .map((video) => ({ ...video, platform: channel.platform }));
+  if (!picks.length) {
+    addLog("Không còn video top nào chưa tải.", "warn");
+    await persist();
+    render();
+    return;
+  }
+  const added = appendToQueue(buildQueueFromReelItems(picks));
+  addLog(`Đã thêm ${added.added} video top của ${channel.name || sourceUrl} vào danh sách tải, bỏ qua ${added.duplicates} link trùng.`, "info");
+  await persist();
+  render();
+}
+
+async function recrawlChannel(sourceUrl) {
+  if (state.running || state.crawling) return;
+  els.channelUrl.value = sourceUrl;
+  els.statsOnly.checked = true;
+  await crawlChannelVideos();
+}
+
+// Quét lại tuần tự mọi kênh đã lưu ở chế độ chỉ thống kê — cập nhật follower/view/video mới cho cả danh sách theo dõi.
+async function recrawlAllChannels() {
+  if (state.running || state.crawling) return;
+  const sources = sortedStats().map((channel) => channel.sourceUrl);
+  if (!sources.length) return;
+  if (!confirm(t("Quét lại {} kênh đã lưu? Mỗi kênh mở một tab và cuộn để cập nhật số liệu.").replace("{}", sources.length))) return;
+  els.statsOnly.checked = true;
+  for (const source of sources) {
+    if (state.running) break;
+    els.channelUrl.value = source;
+    await crawlChannelVideos();
+  }
+  addLog(`Đã quét lại ${sources.length} kênh.`, "info");
+  await persist();
+  render();
 }
 
 function trendChip(delta, unit) {
@@ -1023,13 +1151,17 @@ function shortLink(link) {
 }
 
 function exportStatsCsv() {
-  const rows = [["channel", "platform", "name", "followers", "likes", "videos", "total_views", "avg_views", "last_crawl", "top1", "top1_views", "top2", "top2_views", "top3", "top3_views"]];
+  const rows = [["channel", "platform", "name", "followers", "likes", "videos", "total_views", "avg_views", "median_views", "viral_count", "viral_rate_pct", "posts_per_week", "best_weekday", "best_hour", "new_since_last", "hashtags", "last_crawl",
+    "top1", "top1_views", "top1_caption", "top2", "top2_views", "top2_caption", "top3", "top3_views", "top3_caption"]];
   for (const channel of sortedStats()) {
-    const top = channel.top || [];
+    const m = channel.metrics || {};
+    const top = m.top || channel.top || [];
     rows.push([
       channel.sourceUrl, channel.platform, channel.name, channel.followers, channel.likes, channel.videoCount,
-      channel.totalViews, channel.avgViews, new Date(channel.lastCrawlTime).toISOString(),
-      top[0]?.link || "", top[0]?.views || "", top[1]?.link || "", top[1]?.views || "", top[2]?.link || "", top[2]?.views || ""
+      channel.totalViews, channel.avgViews, m.medianViews ?? "", m.viralCount ?? "", m.viralRate ?? "", m.postsPerWeek ?? "",
+      m.bestWeekday ? WEEKDAYS[m.bestWeekday.key] : "", m.bestHour ? m.bestHour.key : "", m.newCount ?? "",
+      (m.hashtags || []).map((tag) => `${tag.tag}(${tag.count})`).join(" "), new Date(channel.lastCrawlTime).toISOString(),
+      top[0]?.link || "", top[0]?.views || "", top[0]?.caption || "", top[1]?.link || "", top[1]?.views || "", top[1]?.caption || "", top[2]?.link || "", top[2]?.views || "", top[2]?.caption || ""
     ]);
   }
   const csv = "\ufeff" + rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
@@ -1052,7 +1184,7 @@ async function clearStats() {
 function renderQueue() {
   const counts = { all: state.queue.length, pending: 0, running: 0, success: 0, failed: 0 };
   for (const item of state.queue) {
-    const key = item.status === "unsupported" ? "failed" : item.status;
+    const key = item.status === "unsupported" ? "failed" : item.status === "skipped" ? "success" : item.status;
     if (key in counts) counts[key] += 1;
   }
   for (const button of els.queueFilters.querySelectorAll("button[data-filter]")) {
@@ -1060,11 +1192,13 @@ function renderQueue() {
     button.classList.toggle("active", key === state.queueFilter);
     button.textContent = `${t(button.dataset.label || (button.dataset.label = button.textContent.trim()))} ${counts[key]}`;
   }
-  els.prune.disabled = state.running || state.crawling || !state.queue.some((item) => item.status === "success" || item.status === "unsupported");
+  els.prune.disabled = state.running || state.crawling || !state.queue.some((item) => ["success", "unsupported", "skipped"].includes(item.status));
 
   const visible = state.queueFilter === "all"
     ? state.queue
-    : state.queue.filter((item) => (state.queueFilter === "failed" ? item.status === "failed" || item.status === "unsupported" : item.status === state.queueFilter));
+    : state.queue.filter((item) => state.queueFilter === "failed"
+      ? item.status === "failed" || item.status === "unsupported"
+      : state.queueFilter === "success" ? item.status === "success" || item.status === "skipped" : item.status === state.queueFilter);
 
   if (!visible.length) {
     els.queue.className = "queue-list empty";
@@ -1116,7 +1250,8 @@ function statusLabel(status) {
     running: "Đang tải",
     success: "Thành công",
     failed: "Thất bại",
-    unsupported: "Không hỗ trợ"
+    unsupported: "Không hỗ trợ",
+    skipped: "Đã tải trước"
   }[status] || status);
 }
 
