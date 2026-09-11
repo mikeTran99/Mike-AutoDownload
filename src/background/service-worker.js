@@ -1,5 +1,5 @@
-import { t } from "./i18n.js";
-import { computeChannelMetrics, postedAtFromLink } from "./analytics.js";
+import { t } from "../shared/i18n.js";
+import { computeChannelMetrics, postedAtFromLink } from "../shared/analytics.js";
 
 
 const JOB_STATE_KEY = "jobState";
@@ -3061,7 +3061,7 @@ function formatDownloadError(error) {
 function notify(title, message) {
   chrome.storage.local.get(["lang"]).then((data) => chrome.notifications.create({
     type: "basic",
-    iconUrl: "icons/mike-128.png",
+    iconUrl: chrome.runtime.getURL("icons/mike-128.png"),
     title,
     message: t(message, data.lang)
   })).catch(() => {});

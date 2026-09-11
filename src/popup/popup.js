@@ -1,5 +1,5 @@
-import { t, initLang, setLang, getLang, applyDom } from "./i18n.js";
-import { formatCompact, sparklineSvg, VIRAL_MULTIPLIER } from "./analytics.js";
+import { t, initLang, setLang, getLang, applyDom } from "../shared/i18n.js";
+import { formatCompact, sparklineSvg, VIRAL_MULTIPLIER } from "../shared/analytics.js";
 
 const ROUTES = [
   { platform: "facebook", strategy: "so9", hosts: ["facebook.com", "fb.watch"], url: "https://so9.vn/9downloader/facebook" },
@@ -201,7 +201,7 @@ function init() {
     if (event.target === els.contactDialog) els.contactDialog.close();
   });
   // Ảnh QR Telegram: thử assets/telegram-qr.png rồi .jpg; không có file nào thì ẩn ô QR.
-  const qrSources = ["assets/telegram-qr.png", "assets/telegram-qr.jpg"];
+  const qrSources = ["../assets/telegram-qr.png", "../assets/telegram-qr.jpg"];
   const tryNextQr = () => {
     const next = qrSources.shift();
     if (next) els.contactQr.src = next;

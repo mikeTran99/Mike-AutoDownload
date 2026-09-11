@@ -7,8 +7,7 @@ import {
   extractFunction,
   fromRoot,
   readManifest,
-  readProjectFile
-} from "./helpers/project.mjs";
+  readProjectFile, resolveProjectFile } from "./helpers/project.mjs";
 
 const RUNTIME_FILES = ["popup.js", "service-worker.js", "content-script.js", "options.js"];
 const EXPECTED_BRAND = "Mike-Autodownload";
@@ -16,7 +15,7 @@ const EXPECTED_BRAND = "Mike-Autodownload";
 test("all extension JavaScript passes the Node syntax parser", () => {
   for (const relativePath of RUNTIME_FILES) {
     assert.doesNotThrow(() => {
-      execFileSync(process.execPath, ["--check", fromRoot(relativePath)], {
+      execFileSync(process.execPath, ["--check", resolveProjectFile(relativePath)], {
         encoding: "utf8",
         stdio: "pipe"
       });

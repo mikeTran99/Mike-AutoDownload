@@ -44,10 +44,10 @@ test("manifest is a valid MV3 entry point with the supported Chrome baseline", a
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.ok(Number.parseInt(manifest.minimum_chrome_version, 10) >= 114, "sidePanel requires Chrome 114 or newer");
   assert.equal(manifest.background?.type, "module");
-  assert.equal(manifest.background?.service_worker, "service-worker.js");
+  assert.equal(manifest.background?.service_worker, "background/service-worker.js");
   assert.equal(manifest.action?.default_title, EXPECTED_BRAND);
-  assert.equal(manifest.side_panel?.default_path, "popup.html");
-  assert.equal(manifest.options_page, "options.html");
+  assert.equal(manifest.side_panel?.default_path, "popup/popup.html");
+  assert.equal(manifest.options_page, "options/options.html");
 
   assert.deepEqual([...(manifest.permissions || [])].sort(), EXPECTED_PERMISSIONS, "Permission changes require an explicit contract review");
 
@@ -95,7 +95,7 @@ test("content script injection stays restricted to the declared downloader sites
   assert.ok(matches.includes("https://so9.vn/9downloader/*"));
   assert.ok(matches.every((match) => DOWNLOADER_SITES.includes(match)), `Unexpected content-script match: ${matches.join(", ")}`);
   assert.ok(matches.every((match) => !/^https?:\/\/\*\//.test(match)), "No all-hosts content-script injection");
-  assert.ok(contentScripts.some((entry) => entry.js?.includes("content-script.js")));
+  assert.ok(contentScripts.some((entry) => entry.js?.includes("content/content-script.js")));
 });
 
 test("host access never grants clear-text HTTP or all-URL injection", async () => {
@@ -118,7 +118,7 @@ test("declared PNG icons exist and have the declared dimensions", async () => {
   assert.deepEqual(manifest.action?.default_icon, icons, "Toolbar and extension icons must stay in sync");
 
   for (const [declaredSize, relativePath] of Object.entries(icons)) {
-    const bytes = await readFile(fromRoot(relativePath));
+    const bytes = await readFile(fromRoot("src", relativePath));
     assert.ok(bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), `${relativePath} is not a PNG`);
     assert.equal(bytes.readUInt32BE(16), Number(declaredSize), `${relativePath} has the wrong width`);
     assert.equal(bytes.readUInt32BE(20), Number(declaredSize), `${relativePath} has the wrong height`);

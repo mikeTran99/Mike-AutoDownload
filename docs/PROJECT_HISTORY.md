@@ -29,6 +29,9 @@
 - Applied a "Royal Blue & Gold" color scheme for buttons, icons, and headings.
 - Cleaned up the old packaged artifacts from `dist/`.
 
+## 2026-09-11 Project Layout
+- Runtime moved into `src/` (background/, content/, popup/, options/, shared/, icons/, assets/, _locales/); docs into `docs/` (incl. PDF and this history). Load unpacked now targets `src/`. Tests resolve logical file names through `tests/helpers/project.mjs`.
+
 ## 2026-09-11 Research Dashboard (v1.8.0)
 - `analytics.js`: posted time decoded from TikTok/Douyin/Instagram ids, median/outlier (viral ≥3×), views/day, posts per week, best weekday/hour, hashtag frequency, sparkline SVG.
 - Crawlers capture caption (img alt) + thumbnail; `channelStats` keeps up to 200 items/channel with metrics; `downloadHistory` recorded on every success and used for "chưa tải" badges and import skipping (`skipped` status).

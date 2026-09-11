@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readProjectFile, extractFunction } from "./helpers/project.mjs";
-import { computeChannelMetrics, postedAtFromLink } from "../analytics.js";
+import { computeChannelMetrics, postedAtFromLink } from "../src/shared/analytics.js";
 
 function fakeDocument({ host, selectors = {}, meta = {}, bodyText = "" }) {
   const el = (textContent) => (textContent === undefined ? null : { textContent, getAttribute: () => null });

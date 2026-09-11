@@ -20,7 +20,7 @@
     }
   },
   "background": {
-    "service_worker": "service-worker.js",
+    "service_worker": "background/service-worker.js",
     "type": "module"
   },
   "permissions": [
@@ -64,14 +64,14 @@
         "https://snapany.com/*"
       ],
       "js": [
-        "content-script.js"
+        "content/content-script.js"
       ],
       "run_at": "document_idle"
     }
   ],
-  "options_page": "options.html",
+  "options_page": "options/options.html",
   "side_panel": {
-    "default_path": "popup.html"
+    "default_path": "popup/popup.html"
   },
   "default_locale": "vi"
 }

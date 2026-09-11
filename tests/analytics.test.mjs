@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { postedAtFromLink, computeChannelMetrics, extractHashtags, median, sparklineSvg, formatCompact } from "../analytics.js";
+import { postedAtFromLink, computeChannelMetrics, extractHashtags, median, sparklineSvg, formatCompact } from "../src/shared/analytics.js";
 
 test("posted time is decoded from TikTok/Douyin/Instagram ids and absent for Facebook", () => {
   assert.equal(new Date(postedAtFromLink("https://www.tiktok.com/@x/video/7106594312292453675", "tiktok")).toISOString().slice(0, 10), "2022-06-07");

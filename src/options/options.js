@@ -1,4 +1,4 @@
-import { t, initLang, setLang, getLang, applyDom } from "./i18n.js";
+import { t, initLang, setLang, getLang, applyDom } from "../shared/i18n.js";
 
 const timeoutInput = document.getElementById("timeoutSeconds");
 const folderInput = document.getElementById("downloadFolder");

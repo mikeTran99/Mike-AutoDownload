@@ -32,7 +32,7 @@ Extension không hỗ trợ và không có ý định hỗ trợ:
 
 - Trình duyệt Chrome hoặc trình duyệt Chromium có hỗ trợ extension Manifest V3.
 - Kết nối internet ổn định.
-- Thư mục dự án chứa file `manifest.json`.
+- Thư mục `src` của dự án (chứa file `manifest.json`).
 - SO9 Downloader truy cập được tại `https://so9.vn/9downloader/...`.
 - Với Facebook/TikTok crawler: Chrome nên đăng nhập tài khoản có quyền xem kênh cần quét nếu kênh không hoàn toàn công khai.
 - Với Telegram Web: Chrome phải đăng nhập Telegram Web và tài khoản phải có quyền xem video.
@@ -45,7 +45,7 @@ Extension không hỗ trợ và không có ý định hỗ trợ:
 4. Vào `chrome://extensions`.
 5. Bật công tắc `Developer mode`.
 6. Bấm `Load unpacked`.
-7. Chọn đúng thư mục chứa file `manifest.json`.
+7. Chọn đúng thư mục `src` (chứa file `manifest.json`).
 8. Kiểm tra extension hiện tên `Mike-Autodownload`.
 9. Ghim icon extension trên thanh công cụ Chrome để mở nhanh popup.
 
@@ -266,11 +266,7 @@ Tên file sẽ được lấy từ SO9, URL trực tiếp, hoặc tên gợi ý 
 Sau khi sửa code, nên chạy các lệnh:
 
 ```powershell
-node --check popup.js
-node --check service-worker.js
-node --check content-script.js
-node --check options.js
-node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8')); console.log('manifest ok')"
+npm run check
 ```
 
 Khi public repo, nên kiểm tra thêm:

@@ -7,7 +7,8 @@ Mike-Autodownload là Chrome Extension Manifest V3 giúp tải hàng loạt vide
 ## Tài liệu sử dụng
 
 - Hướng dẫn chi tiết: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
-- Bản PDF: [output/pdf/Mike-Autodownload-Huong-dan-su-dung.pdf](output/pdf/Mike-Autodownload-Huong-dan-su-dung.pdf)
+- Bản PDF: [docs/pdf/Mike-Autodownload-Huong-dan-su-dung.pdf](docs/pdf/Mike-Autodownload-Huong-dan-su-dung.pdf)
+- Lịch sử thay đổi: [docs/PROJECT_HISTORY.md](docs/PROJECT_HISTORY.md)
 - Chính sách quyền riêng tư: [PRIVACY.md](PRIVACY.md)
 
 ## Tính năng chính
@@ -33,7 +34,7 @@ Mike-Autodownload là Chrome Extension Manifest V3 giúp tải hàng loạt vide
 2. Mở Chrome và vào `chrome://extensions`.
 3. Bật `Developer mode`.
 4. Bấm `Load unpacked`.
-5. Chọn thư mục chứa file `manifest.json`.
+5. Chọn thư mục `src` (thư mục chứa `manifest.json`).
 6. Ghim icon `Mike-Autodownload` trên thanh công cụ Chrome.
 
 Extension yêu cầu Chrome 114 trở lên vì sử dụng Side Panel API. Sau khi sửa `manifest.json`, hãy reload unpacked extension trong `chrome://extensions`.
@@ -46,16 +47,28 @@ Không cam kết tương thích mọi website hoặc mọi trình duyệt. Bản
 
 Extension chỉ hỗ trợ nội dung công khai, direct video URL, hoặc nội dung mà tài khoản Chrome hiện tại được phép xem. Dự án không bypass DRM, paywall, login, blob stream, HLS/DASH segment stitching, hạn chế Telegram, quyền riêng tư, hoặc nội dung bạn không có quyền tải.
 
+## Cấu trúc dự án
+
+```
+src/                  Extension (Load unpacked chọn thư mục này)
+  manifest.json
+  background/         service-worker.js — hàng đợi, crawler, chuỗi nguồn tải, thống kê
+  content/            content-script.js — thao tác trang downloader (SO9, snaptik, ...)
+  popup/              Side Panel (popup.html, popup.js)
+  options/            Trang cài đặt
+  shared/             i18n.js (VI/EN), analytics.js (phân tích kênh), styles.css
+  icons/  assets/  _locales/
+docs/                 Hướng dẫn, PDF, kế hoạch, lịch sử
+tests/                node --test (hợp đồng MV3, i18n, analytics, thống kê)
+tools/                Sinh PDF hướng dẫn
+```
+
 ## Kiểm tra kỹ thuật
 
 Sau khi sửa code, chạy:
 
 ```powershell
-node --check popup.js
-node --check service-worker.js
-node --check content-script.js
-node --check options.js
-node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8')); console.log('manifest ok')"
+npm run check
 ```
 
-Nếu sửa `manifest.json`, icon, hoặc `service-worker.js`, hãy reload lại unpacked extension trong `chrome://extensions`.
+Nếu sửa `src/manifest.json`, icon, hoặc `src/background/service-worker.js`, hãy reload lại unpacked extension trong `chrome://extensions`.

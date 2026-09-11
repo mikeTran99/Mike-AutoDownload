@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { t } from "../i18n.js";
+import { t } from "../src/shared/i18n.js";
 
 test("i18n translates exact, templated and nested Vietnamese messages", () => {
   assert.equal(t("Tạm dừng", "en"), "Pause");

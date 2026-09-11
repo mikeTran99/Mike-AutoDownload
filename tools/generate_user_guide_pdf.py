@@ -25,8 +25,8 @@ from reportlab.platypus import (
 
 ROOT = Path(__file__).resolve().parents[1]
 GUIDE = ROOT / "docs" / "USER_GUIDE.md"
-OUTPUT = ROOT / "output" / "pdf" / "Mike-Autodownload-Huong-dan-su-dung.pdf"
-ICON = ROOT / "icons" / "mike-128.png"
+OUTPUT = ROOT / "docs" / "pdf" / "Mike-Autodownload-Huong-dan-su-dung.pdf"
+ICON = ROOT / "src" / "icons" / "mike-128.png"
 
 
 def register_fonts() -> tuple[str, str, str]:

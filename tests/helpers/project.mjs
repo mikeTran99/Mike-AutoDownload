@@ -4,13 +4,32 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const projectRoot = fileURLToPath(new URL("../..", import.meta.url));
+export const extensionRoot = path.join(projectRoot, "src");
+
+// Tên file logic (như cũ) → vị trí thật trong src/. Test không phải biết bố cục thư mục.
+const FILE_LAYOUT = {
+  "manifest.json": "src/manifest.json",
+  "service-worker.js": "src/background/service-worker.js",
+  "content-script.js": "src/content/content-script.js",
+  "popup.html": "src/popup/popup.html",
+  "popup.js": "src/popup/popup.js",
+  "options.html": "src/options/options.html",
+  "options.js": "src/options/options.js",
+  "i18n.js": "src/shared/i18n.js",
+  "analytics.js": "src/shared/analytics.js",
+  "styles.css": "src/shared/styles.css"
+};
 
 export function fromRoot(...segments) {
   return path.join(projectRoot, ...segments);
 }
 
+export function resolveProjectFile(relativePath) {
+  return fromRoot(FILE_LAYOUT[relativePath] || relativePath);
+}
+
 export async function readProjectFile(relativePath) {
-  return readFile(fromRoot(relativePath), "utf8");
+  return readFile(resolveProjectFile(relativePath), "utf8");
 }
 
 export async function readManifest() {
@@ -24,8 +43,8 @@ export async function assertLocalFileExists(reference, label = "file reference")
   assert.ok(!path.isAbsolute(reference), `${label} must be relative: ${reference}`);
   assert.ok(!/^[a-z][a-z\d+.-]*:/i.test(reference), `${label} must be local: ${reference}`);
 
-  const resolved = path.resolve(projectRoot, reference);
-  const relative = path.relative(projectRoot, resolved);
+  const resolved = path.resolve(extensionRoot, reference);
+  const relative = path.relative(extensionRoot, resolved);
   assert.ok(relative && !relative.startsWith("..") && !path.isAbsolute(relative), `${label} escapes the project: ${reference}`);
   await access(resolved);
 }
