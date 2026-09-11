@@ -1,8 +1,22 @@
+import { t, initLang, setLang, getLang, applyDom } from "./i18n.js";
+
 const timeoutInput = document.getElementById("timeoutSeconds");
 const folderInput = document.getElementById("downloadFolder");
 const saveBtn = document.getElementById("saveBtn");
 const saveStatus = document.getElementById("saveStatus");
 const themeToggle = document.getElementById("themeToggle");
+const langToggle = document.getElementById("langToggle");
+
+initLang().then(() => {
+  applyDom();
+  langToggle.textContent = getLang() === "vi" ? "EN" : "VI";
+});
+
+langToggle.addEventListener("click", async () => {
+  await setLang(getLang() === "vi" ? "en" : "vi");
+  applyDom();
+  langToggle.textContent = getLang() === "vi" ? "EN" : "VI";
+});
 
 chrome.storage.local.get(["timeoutSeconds", "downloadFolder", "theme"], (data) => {
   timeoutInput.value = data.timeoutSeconds || 90;
@@ -17,12 +31,12 @@ saveBtn.addEventListener("click", async () => {
     timeoutInput.value = timeoutSeconds;
     folderInput.value = downloadFolder;
     await chrome.storage.local.set({ timeoutSeconds, downloadFolder });
-    saveStatus.textContent = "Đã lưu cài đặt.";
+    saveStatus.textContent = t("Đã lưu cài đặt.");
     setTimeout(() => {
       saveStatus.textContent = "";
     }, 1800);
   } catch (error) {
-    saveStatus.textContent = `Không thể lưu: ${error.message || error}`;
+    saveStatus.textContent = t(`Không thể lưu: ${error.message || error}`);
   }
 });
 

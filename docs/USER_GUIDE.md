@@ -281,6 +281,12 @@ Khi public repo, nên kiểm tra thêm:
 
 Trạng thái job đang chạy được lưu cục bộ để service worker có thể đối chiếu và phục hồi sau khi Chrome tạm dừng worker. Không bắt đầu quét kênh đồng thời với một queue đang tải; hãy chờ queue hiện tại kết thúc hoặc dừng trước khi quét lại.
 
-## 22. Kiểm thử mã nguồn
+## 22. YouTube, Bilibili và ngôn ngữ
+
+- Dán link YouTube (`youtube.com/watch`, `youtu.be`, Shorts) hoặc Bilibili (`bilibili.com/video/BV...`, `b23.tv`) vào ô link như bình thường.
+- YouTube chỉ tải được bản 360p (đôi khi 720p) có tiếng vì trình duyệt không ghép luồng hình/tiếng riêng; muốn 1080p cần công cụ desktop.
+- Nút **EN/VI** ở góc trên Side Panel và trang Cài đặt đổi ngôn ngữ toàn bộ giao diện, kể cả log đã ghi.
+
+## 23. Kiểm thử mã nguồn
 
 Chạy `npm run check` (Node 22+) để kiểm tra cú pháp và hợp đồng MV3 (manifest, quyền, thông điệp runtime).

@@ -20,7 +20,10 @@ const EXPECTED_PERMISSIONS = [
   "tabs"
 ];
 const EXPECTED_REQUIRED_HOSTS = [
+  "https://*.savefrom.net/*",
+  "https://*.youtube.com/*",
   "https://facebook.com/*",
+  "https://snapany.com/*",
   "https://snapdouyin.app/*",
   "https://snapinsta.app/*",
   "https://snapsave.app/*",
@@ -29,7 +32,8 @@ const EXPECTED_REQUIRED_HOSTS = [
   "https://ssstik.io/*",
   "https://tiktok.com/*",
   "https://www.facebook.com/*",
-  "https://www.tiktok.com/*"
+  "https://www.tiktok.com/*",
+  "https://youtu.be/*"
 ];
 
 test("manifest is a valid MV3 entry point with the supported Chrome baseline", async () => {
@@ -77,7 +81,9 @@ const DOWNLOADER_SITES = [
   "https://ssstik.io/*",
   "https://snapsave.app/*",
   "https://snapinsta.app/*",
-  "https://snapdouyin.app/*"
+  "https://snapdouyin.app/*",
+  "https://*.savefrom.net/*",
+  "https://snapany.com/*"
 ];
 
 test("content script injection stays restricted to the declared downloader sites", async () => {
@@ -88,7 +94,7 @@ test("content script injection stays restricted to the declared downloader sites
   const matches = contentScripts.flatMap((entry) => entry.matches || []);
   assert.ok(matches.includes("https://so9.vn/9downloader/*"));
   assert.ok(matches.every((match) => DOWNLOADER_SITES.includes(match)), `Unexpected content-script match: ${matches.join(", ")}`);
-  assert.ok(matches.every((match) => !/^https?:\/\/\*/.test(match)), "No wildcard-host content-script injection");
+  assert.ok(matches.every((match) => !/^https?:\/\/\*\//.test(match)), "No all-hosts content-script injection");
   assert.ok(contentScripts.some((entry) => entry.js?.includes("content-script.js")));
 });
 

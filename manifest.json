@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "minimum_chrome_version": "114",
   "name": "Mike-Autodownload",
-  "description": "Tự động tải video Facebook, TikTok, Instagram, Douyin (trực tiếp từ trang, SO9 và các site dự phòng), quét kênh đa nền tảng và video hợp lệ trên Telegram Web.",
-  "version": "1.4.0",
+  "description": "__MSG_appDesc__",
+  "version": "1.5.0",
   "icons": {
     "16": "icons/mike-16.png",
     "32": "icons/mike-32.png",
@@ -42,7 +42,11 @@
     "https://ssstik.io/*",
     "https://snapsave.app/*",
     "https://snapinsta.app/*",
-    "https://snapdouyin.app/*"
+    "https://snapdouyin.app/*",
+    "https://*.youtube.com/*",
+    "https://youtu.be/*",
+    "https://*.savefrom.net/*",
+    "https://snapany.com/*"
   ],
   "optional_host_permissions": [
     "https://*/*"
@@ -55,7 +59,9 @@
         "https://ssstik.io/*",
         "https://snapsave.app/*",
         "https://snapinsta.app/*",
-        "https://snapdouyin.app/*"
+        "https://snapdouyin.app/*",
+        "https://*.savefrom.net/*",
+        "https://snapany.com/*"
       ],
       "js": [
         "content-script.js"
@@ -66,5 +72,6 @@
   "options_page": "options.html",
   "side_panel": {
     "default_path": "popup.html"
-  }
+  },
+  "default_locale": "vi"
 }

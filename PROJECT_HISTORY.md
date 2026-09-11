@@ -29,6 +29,11 @@
 - Applied a "Royal Blue & Gold" color scheme for buttons, icons, and headings.
 - Cleaned up the old packaged artifacts from `dist/`.
 
+## 2026-09-11 YouTube/Bilibili + Bilingual UI (v1.5.0)
+- YouTube route: native progressive formats (itag 18/22) from the watch page, then savefrom.net (hidden `a.link-download` with audio). Bilibili route: snapany.com (direct bilivideo mp4).
+- `i18n.js`: Vietnamese→English pattern dictionary applied at render time; EN/VI toggle in popup and options; `_locales` for the short manifest description.
+- Shortened manifest description and popup subtitle.
+
 ## 2026-09-11 Backend Fallback Chain (v1.4.0)
 - Download chain per platform (`BACKENDS` in `service-worker.js`): native page JSON (`browser_native_hd_url`, `playAddr`, `video_url`) → SO9 → alternative downloader sites. Failures fall through to the next source.
 - Content script scoring prefers HD/no-watermark links and skips MP3/photo buttons on the alternative sites.

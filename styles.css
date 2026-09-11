@@ -615,6 +615,8 @@ button:disabled {
   border: 1px solid rgba(255,255,255,0.05);
 }
 
+.hero-buttons { display: flex; gap: 8px; }
+
 .icon-button {
   width: 44px;
   height: 44px;

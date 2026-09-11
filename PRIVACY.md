@@ -33,7 +33,7 @@ Danh sách chờ, thiết lập và nhật ký được lưu cục bộ bằng `
 - `alarms`: đánh thức service worker để kiểm tra và khôi phục an toàn job đang xử lý sau khi Chrome tạm dừng worker.
 - `notifications`: thông báo khi danh sách tải hoàn tất hoặc bị dừng.
 - `sidePanel`: hiển thị giao diện điều khiển trong Side Panel của Chrome.
-- Quyền host bắt buộc cho SO9, Facebook và TikTok: vận hành downloader SO9 và tính năng quét kênh Facebook/TikTok.
+- Quyền host bắt buộc cho SO9, Facebook, TikTok, YouTube và các trang downloader dự phòng (snaptik.app, ssstik.io, snapsave.app, snapinsta.app, snapdouyin.app, savefrom.net, snapany.com): mở trang, nhập link và đọc kết quả tải; không đọc cookie hay nội dung khác.
 - Quyền host HTTPS tùy chọn: được yêu cầu khi người dùng chọn quét profile Instagram/Douyin, xử lý trang media trực tiếp hoặc Telegram Web. Tiện ích không yêu cầu quyền HTTP rộng.
 
 ## Chia sẻ, lưu giữ và xóa dữ liệu

@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 
 const JOB_STATE_KEY = "jobState";
 const JOB_SCHEMA_VERSION = 1;
@@ -11,7 +13,10 @@ const BACKENDS = {
   facebook: ["native", "https://so9.vn/9downloader/facebook", "https://snapsave.app/"],
   tiktok: ["https://so9.vn/9downloader/tiktok", "native", "https://snaptik.app/", "https://ssstik.io/"],
   instagram: ["https://so9.vn/9downloader/insta", "https://snapinsta.app/"],
-  douyin: ["https://so9.vn/9downloader/douyin", "https://snapdouyin.app/"]
+  douyin: ["https://so9.vn/9downloader/douyin", "https://snapdouyin.app/"],
+  // YouTube trong trình duyệt chỉ lấy được bản progressive 360p (itag 18) có tiếng; các mức cao hơn cần ghép stream (không hỗ trợ).
+  youtube: ["native", "https://en1.savefrom.net/"],
+  bilibili: ["https://snapany.com/bilibili"]
 };
 
 let runLock = false;
@@ -2237,7 +2242,15 @@ function collectDirectMediaCandidates() {
   const scriptText = [...document.scripts].map((script) => script.textContent || "").join("\n");
   const jsonKeyPattern = /"(browser_native_hd_url|browser_native_sd_url|playAddr|video_url)"\s*:\s*"(https?:[^"]+)"/g;
   const keyQuality = { browser_native_hd_url: "1080p", browser_native_sd_url: "480p", playAddr: "720p", video_url: "720p" };
-  const pageTitle = (document.title || "video").replace(/\s*[|\-\u2013]\s*(Facebook|TikTok|Instagram|Douyin).*$/i, "").slice(0, 80);
+  const pageTitle = (document.title || "video").replace(/\s*[|\-\u2013]\s*(Facebook|TikTok|Instagram|Douyin|YouTube|Bilibili|哔哩哔哩).*$/i, "").slice(0, 80);
+  for (const match of scriptText.matchAll(/"itag"\s*:\s*(18|22)\s*,[^{}]*?"url"\s*:\s*"(https:[^"]+googlevideo\.com[^"]+)"/g)) {
+    addCandidate(match[2].replace(/\\u0026/g, "&"), {
+      label: `${pageTitle} ${match[1] === "22" ? "720p" : "360p"}`,
+      filename: `${pageTitle}.mp4`,
+      mime: "video/mp4",
+      source: "script-youtube"
+    });
+  }
   for (const match of scriptText.matchAll(jsonKeyPattern)) {
     const url = match[2].replace(/\\u0026/g, "&").replace(/\\\//g, "/").replace(/\\"/g, '"');
     addCandidate(url, {
@@ -2874,12 +2887,12 @@ function formatDownloadError(error) {
 }
 
 function notify(title, message) {
-  chrome.notifications.create({
+  chrome.storage.local.get(["lang"]).then((data) => chrome.notifications.create({
     type: "basic",
     iconUrl: "icons/mike-128.png",
     title,
-    message
-  }).catch(() => {});
+    message: t(message, data.lang)
+  })).catch(() => {});
 }
 
 function sleep(ms) {

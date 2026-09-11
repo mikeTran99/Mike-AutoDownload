@@ -1,11 +1,11 @@
 {
   "name": "mike-autodownload",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "Static contract checks for the Mike-Autodownload Chrome extension.",
   "scripts": {
     "test": "node --test \"tests/*.test.mjs\"",
-    "check:syntax": "node --check popup.js && node --check service-worker.js && node --check content-script.js && node --check options.js",
+    "check:syntax": "node --check popup.js && node --check service-worker.js && node --check content-script.js && node --check options.js && node --check i18n.js",
     "check": "npm run check:syntax && npm test"
   },
   "engines": {

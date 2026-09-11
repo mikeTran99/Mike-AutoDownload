@@ -1,8 +1,12 @@
+import { t, initLang, setLang, getLang, applyDom } from "./i18n.js";
+
 const ROUTES = [
   { platform: "facebook", strategy: "so9", hosts: ["facebook.com", "fb.watch"], url: "https://so9.vn/9downloader/facebook" },
   { platform: "tiktok", strategy: "so9", hosts: ["tiktok.com", "vm.tiktok.com"], url: "https://so9.vn/9downloader/tiktok" },
   { platform: "instagram", strategy: "so9", hosts: ["instagram.com"], url: "https://so9.vn/9downloader/insta" },
-  { platform: "douyin", strategy: "so9", hosts: ["douyin.com"], url: "https://so9.vn/9downloader/douyin" }
+  { platform: "douyin", strategy: "so9", hosts: ["douyin.com"], url: "https://so9.vn/9downloader/douyin" },
+  { platform: "youtube", strategy: "so9", hosts: ["youtube.com", "youtu.be"], url: "https://en1.savefrom.net/" },
+  { platform: "bilibili", strategy: "so9", hosts: ["bilibili.com", "b23.tv"], url: "https://snapany.com/bilibili" }
 ];
 
 const TELEGRAM_WEB_ORIGIN = "https://web.telegram.org/*";
@@ -55,10 +59,14 @@ const els = {
   failed: document.getElementById("failedCount"),
   badge: document.getElementById("runBadge"),
   themeToggle: document.getElementById("themeToggle"),
+  langToggle: document.getElementById("langToggle"),
   clearData: document.getElementById("clearDataBtn")
 };
 
-init();
+initLang().then(() => {
+  applyDom();
+  init();
+});
 
 function init() {
   chrome.storage.local.get([
@@ -126,6 +134,7 @@ function init() {
   els.clear.addEventListener("click", clearQueue);
   els.exportLog.addEventListener("click", exportLogs);
   els.themeToggle.addEventListener("click", toggleTheme);
+  els.langToggle.addEventListener("click", toggleLang);
   els.clearData.addEventListener("click", clearAllData);
 }
 
@@ -135,7 +144,7 @@ async function clearAllData() {
     render();
     return;
   }
-  if (!confirm("Bạn có chắc chắn muốn xóa toàn bộ dữ liệu cũ (link đã lưu, danh sách tải, log, thông tin quét kênh)?")) return;
+  if (!confirm(t("Bạn có chắc chắn muốn xóa toàn bộ dữ liệu cũ (link đã lưu, danh sách tải, log, thông tin quét kênh)?"))) return;
   
   state.queue = [];
   state.logs = [];
@@ -159,6 +168,12 @@ async function clearAllData() {
   ]);
   
   await persist();
+  render();
+}
+
+async function toggleLang() {
+  await setLang(getLang() === "vi" ? "en" : "vi");
+  applyDom();
   render();
 }
 
@@ -778,7 +793,7 @@ async function stopRun() {
 
 async function clearQueue() {
   if (state.running || state.crawling) return;
-  if (state.queue.length && !confirm("Bạn có chắc chắn muốn xóa toàn bộ danh sách tải và log không?")) return;
+  if (state.queue.length && !confirm(t("Bạn có chắc chắn muốn xóa toàn bộ danh sách tải và log không?"))) return;
   state.queue = [];
   state.logs = [];
   await persist();
@@ -839,7 +854,8 @@ function render() {
   els.start.disabled = state.running || state.crawling || state.queue.length === 0;
   els.loadSaved.disabled = state.running || state.crawling || state.savedReelLinks.length === 0;
   els.pause.disabled = !state.running;
-  els.pause.textContent = state.paused ? "Tiếp tục" : "Tạm dừng";
+  els.pause.textContent = t(state.paused ? "Tiếp tục" : "Tạm dừng");
+  els.langToggle.textContent = getLang() === "vi" ? "EN" : "VI";
   els.stop.disabled = !state.running && !state.crawling;
   els.clear.disabled = state.running || state.crawling;
   els.clearData.disabled = state.running || state.crawling;
@@ -854,11 +870,11 @@ function render() {
 
   const badgeState = state.crawling ? "crawling" : state.running ? (state.paused ? "paused" : "running") : "idle";
   els.badge.className = `status-badge ${badgeState}`;
-  els.badge.textContent = state.crawling ? "Đang quét" : state.running ? (state.paused ? "Tạm dừng" : "Đang chạy") : "Sẵn sàng";
-  els.savedCount.textContent = `Đã lưu ${state.savedReelLinks.length} link`;
-  els.lastCrawl.textContent = state.lastCrawlTime
+  els.badge.textContent = t(state.crawling ? "Đang quét" : state.running ? (state.paused ? "Tạm dừng" : "Đang chạy") : "Sẵn sàng");
+  els.savedCount.textContent = t(`Đã lưu ${state.savedReelLinks.length} link`);
+  els.lastCrawl.textContent = t(state.lastCrawlTime
     ? `Lần quét gần nhất: ${new Date(state.lastCrawlTime).toLocaleString()}`
-    : "Chưa quét kênh nào.";
+    : "Chưa quét kênh nào.");
 
   renderQueue();
   renderLogs();
@@ -867,7 +883,7 @@ function render() {
 function renderQueue() {
   if (!state.queue.length) {
     els.queue.className = "queue-list empty";
-    els.queue.textContent = "Chưa có link nào được tải lên.";
+    els.queue.textContent = t("Chưa có link nào được tải lên.");
     return;
   }
 
@@ -880,7 +896,7 @@ function renderQueue() {
         ${renderViewBadge(item)}
         <span class="${statusClass(item.status)}">${statusLabel(item.status)}</span>
       </div>
-      <small>${escapeHtml(item.message || "")}</small>
+      <small>${escapeHtml(t(item.message || ""))}</small>
     </article>
   `).join("");
 }
@@ -888,13 +904,13 @@ function renderQueue() {
 function renderViewBadge(item) {
   if (!item.viewText && !item.views) return "";
   const label = item.viewText || formatNumber(item.views);
-  return `<span class="view-badge">View: ${escapeHtml(label)}</span>`;
+  return `<span class="view-badge">${escapeHtml(t(`View: ${label}`))}</span>`;
 }
 
 function renderLogs() {
   els.logs.innerHTML = state.logs.map((log) => `
     <article class="log-item">
-      <strong class="${log.level === "error" ? "fail" : log.level === "warn" ? "warn" : ""}">${escapeHtml(log.message)}</strong>
+      <strong class="${log.level === "error" ? "fail" : log.level === "warn" ? "warn" : ""}">${escapeHtml(t(log.message))}</strong>
       <div class="log-meta">
         <span>${new Date(log.time).toLocaleTimeString()}</span>
         <span>${escapeHtml(log.level)}</span>
@@ -904,13 +920,13 @@ function renderLogs() {
 }
 
 function statusLabel(status) {
-  return {
+  return t({
     pending: "Chờ tải",
     running: "Đang tải",
     success: "Thành công",
     failed: "Thất bại",
     unsupported: "Không hỗ trợ"
-  }[status] || status;
+  }[status] || status);
 }
 
 function statusClass(status) {

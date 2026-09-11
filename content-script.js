@@ -133,7 +133,22 @@ async function waitForDownloadCandidate(timeoutMs) {
   throw new Error("Trang downloader chưa tạo được file tải xuống trong thời gian chờ.");
 }
 
+// Site có kết quả ẩn trong dropdown: chọn thẳng link mp4 có tiếng thay vì nút hiển thị (savefrom: nút hiển thị chỉ mở trang cài "helper").
+const SITE_RESULT_SELECTORS = {
+  "savefrom.net": 'a.link-download[href*="googlevideo"]:not(.no-audio):not(.no-downloadable)'
+};
+
+function findSiteResult() {
+  const host = location.hostname.replace(/^www\./, "");
+  const selector = Object.entries(SITE_RESULT_SELECTORS).find(([site]) => host === site || host.endsWith(`.${site}`))?.[1];
+  const element = selector ? document.querySelector(selector) : null;
+  return element ? buildCandidate(element) : null;
+}
+
 function findDownloadCandidate() {
+  const siteResult = findSiteResult();
+  if (siteResult) return siteResult;
+
   const elements = [...document.querySelectorAll("a[href], button, [role='button']")]
     .filter(isVisible)
     .map(buildCandidate)
@@ -229,6 +244,8 @@ function isDirectMediaUrl(href) {
     const pathname = url.pathname.toLowerCase();
     const hostname = url.hostname.toLowerCase();
     return /\.(mp4|mov|webm|m4v|mkv)(\?|$)/i.test(pathname) ||
+      (hostname.endsWith("googlevideo.com") && pathname === "/videoplayback") ||
+      hostname.endsWith("bilivideo.com") ||
       (hostname.includes("cdn") && /\/(video|videos|media|downloader|download)\//i.test(pathname));
   } catch (_) {
     return false;
