@@ -332,19 +332,120 @@ async function finishRun(runId, wasStopped = false) {
 
 async function crawlChannelVideos(channelUrl, maxCount, folder, minViews) {
   const platform = detectCrawlPlatform(channelUrl);
+  let result;
   if (platform === "facebook") {
-    return await crawlFacebookReels(channelUrl, maxCount, folder, minViews);
+    result = await crawlFacebookReels(channelUrl, maxCount, folder, minViews);
+  } else if (platform === "tiktok") {
+    result = await crawlTikTokProfile(channelUrl, maxCount, folder, minViews);
+  } else if (platform === "instagram") {
+    result = await crawlInstagramProfile(channelUrl, maxCount, folder, minViews);
+  } else if (platform === "douyin") {
+    result = await crawlDouyinProfile(channelUrl, maxCount, folder, minViews);
+  } else {
+    throw new Error("Chỉ hỗ trợ quét kênh Facebook, TikTok, Instagram hoặc Douyin.");
   }
-  if (platform === "tiktok") {
-    return await crawlTikTokProfile(channelUrl, maxCount, folder, minViews);
+  if (result?.ok) await recordChannelStats(channelUrl, platform, result);
+  return result;
+}
+
+// ---- Thống kê kênh: gom số liệu từ lần quét (view từng video + số follower đọc trên trang) vào storage.channelStats.
+const MAX_CHANNEL_STATS = 50;
+const MAX_STATS_HISTORY = 30;
+
+async function readProfileHeader(tabId) {
+  try {
+    const [result] = await chrome.scripting.executeScript({ target: { tabId }, func: readProfileHeaderInPage });
+    return result?.result || {};
+  } catch (_) {
+    return {};
   }
-  if (platform === "instagram") {
-    return await crawlInstagramProfile(channelUrl, maxCount, folder, minViews);
+}
+
+function readProfileHeaderInPage() {
+  const text = (value) => String(value || "").replace(/\s+/g, " ").trim();
+  const meta = (name) => document.querySelector(`meta[property="${name}"], meta[name="${name}"]`)?.getAttribute("content") || "";
+
+  function parseCompact(raw) {
+    const normalized = text(raw).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
+    const match = normalized.match(/(\d+(?:[.,]\d+)?)\s*(k|m|b|tr|n|nghin|ngan|trieu|ty|万|亿)?/i);
+    if (!match) return 0;
+    const suffix = match[2] || "";
+    const value = Number.parseFloat(match[1].replace(",", "."));
+    const plain = Number.parseInt(match[1].replace(/[.,]/g, ""), 10);
+    const multiplier = ["k", "n", "nghin", "ngan"].includes(suffix) ? 1000
+      : ["m", "tr", "trieu", "万"].includes(suffix) ? 1000000
+        : ["b", "ty", "亿"].includes(suffix) ? 1000000000 : 0;
+    return multiplier ? Math.round(value * multiplier) : plain || 0;
   }
-  if (platform === "douyin") {
-    return await crawlDouyinProfile(channelUrl, maxCount, folder, minViews);
+
+  const host = location.hostname.replace(/^www\./, "");
+  const body = document.body?.innerText || "";
+  let name = "";
+  let followersText = "";
+  let likesText = "";
+
+  if (host.endsWith("tiktok.com")) {
+    name = text(document.querySelector('[data-e2e="user-title"], h1')?.textContent);
+    followersText = text(document.querySelector('[data-e2e="followers-count"]')?.textContent);
+    likesText = text(document.querySelector('[data-e2e="likes-count"]')?.textContent);
+  } else if (host.endsWith("instagram.com")) {
+    name = text(meta("og:title")).replace(/\s*[(•].*$/, "");
+    followersText = (meta("og:description").match(/([\d.,]+\s*[KMB]?)\s*(?:Followers|người theo dõi)/i) || [])[1] || "";
+  } else if (host.endsWith("douyin.com")) {
+    name = text(document.querySelector("h1")?.textContent);
+    followersText = (body.match(/粉丝\s*([\d.,]+\s*[万亿]?)/) || [])[1] || "";
+    likesText = (body.match(/获赞\s*([\d.,]+\s*[万亿]?)/) || [])[1] || "";
+  } else {
+    name = text(document.querySelector("h1")?.textContent) || text(meta("og:title"));
+    followersText = (body.match(/([\d.,]+\s*(?:Tr|N|K|M|B)?)\s*(?:người theo dõi|followers)/i) || [])[1] || "";
+    likesText = (body.match(/([\d.,]+\s*(?:Tr|N|K|M|B)?)\s*(?:lượt thích|likes)/i) || [])[1] || "";
   }
-  throw new Error("Chỉ hỗ trợ quét kênh Facebook, TikTok, Instagram hoặc Douyin.");
+
+  return {
+    name: name.slice(0, 80),
+    followersText,
+    followers: parseCompact(followersText),
+    likesText,
+    likes: parseCompact(likesText)
+  };
+}
+
+async function recordChannelStats(sourceUrl, platform, result) {
+  const items = Array.isArray(result.items) ? result.items : [];
+  const withViews = items.filter((item) => Number(item.views) > 0);
+  const totalViews = withViews.reduce((sum, item) => sum + Number(item.views), 0);
+  const top = [...withViews].sort((a, b) => b.views - a.views).slice(0, 5)
+    .map((item) => ({ link: item.link, views: item.views, viewText: item.viewText || "" }));
+  const profile = result.profile || {};
+  const time = result.lastCrawlTime || Date.now();
+
+  const data = await chrome.storage.local.get(["channelStats"]);
+  const stats = data.channelStats || {};
+  const previous = stats[sourceUrl] || {};
+  const history = [...(previous.history || []), { time, followers: profile.followers || 0, totalViews, videoCount: items.length }].slice(-MAX_STATS_HISTORY);
+
+  stats[sourceUrl] = {
+    sourceUrl,
+    platform,
+    name: profile.name || previous.name || sourceUrl,
+    followers: profile.followers || previous.followers || 0,
+    followersText: profile.followersText || previous.followersText || "",
+    likes: profile.likes || previous.likes || 0,
+    likesText: profile.likesText || previous.likesText || "",
+    videoCount: items.length,
+    totalViews,
+    avgViews: withViews.length ? Math.round(totalViews / withViews.length) : 0,
+    top,
+    lastCrawlTime: time,
+    history
+  };
+
+  // ponytail: giữ 50 kênh gần nhất, đủ cho một người dùng; thêm phân trang khi cần.
+  const trimmed = Object.fromEntries(Object.values(stats)
+    .sort((a, b) => b.lastCrawlTime - a.lastCrawlTime)
+    .slice(0, MAX_CHANNEL_STATS)
+    .map((entry) => [entry.sourceUrl, entry]));
+  await chrome.storage.local.set({ channelStats: trimmed });
 }
 
 function assertCrawlActive() {
@@ -393,6 +494,7 @@ async function crawlFacebookReels(channelUrl, maxCount, folder, minViews) {
       throw new Error("Không tìm thấy link Reels nào trên kênh sau khi cuộn.");
     }
 
+    const profile = await readProfileHeader(tab.id);
     const lastCrawlTime = Date.now();
     const queue = items.map((item, index) => ({
       id: `crawl-${lastCrawlTime}-${index}`,
@@ -423,7 +525,7 @@ async function crawlFacebookReels(channelUrl, maxCount, folder, minViews) {
     await appendLog(`Đã đưa ${queue.length} link Facebook vào danh sách tải.`, "info");
     assertCrawlActive();
     await startRunQueueAfterCrawl(folder);
-    return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime };
+    return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime, profile };
   } catch (error) {
     await appendLog(`Quét kênh thất bại: ${error.message || error}`, "error");
     throw error;
@@ -479,6 +581,7 @@ async function crawlTikTokProfile(channelUrl, maxCount, folder, minViews) {
       throw new Error("Không tìm thấy link video TikTok nào trên kênh sau khi cuộn.");
     }
 
+    const profile = await readProfileHeader(tab.id);
     const lastCrawlTime = Date.now();
     const queue = items.map((item, index) => ({
       id: `crawl-${lastCrawlTime}-${index}`,
@@ -509,7 +612,7 @@ async function crawlTikTokProfile(channelUrl, maxCount, folder, minViews) {
     await appendLog(`Đã đưa ${queue.length} link TikTok vào danh sách tải.`, "info");
     assertCrawlActive();
     await startRunQueueAfterCrawl(folder);
-    return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime };
+    return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime, profile };
   } catch (error) {
     await appendLog(`Quét kênh TikTok thất bại: ${error.message || error}`, "error");
     throw error;
@@ -613,6 +716,7 @@ async function crawlPublicProfile({
       throw new Error(`Không tìm thấy ${itemLabel} nào trên profile sau khi cuộn.`);
     }
 
+    const profile = await readProfileHeader(tab.id);
     const lastCrawlTime = Date.now();
     const queue = items.map((item, index) => ({
       id: `crawl-${lastCrawlTime}-${index}`,
@@ -643,7 +747,7 @@ async function crawlPublicProfile({
     await appendLog(`Đã đưa ${queue.length} link ${label} vào danh sách tải.`, "info");
     assertCrawlActive();
     await startRunQueueAfterCrawl(folder);
-    return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime };
+    return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime, profile };
   } catch (error) {
     await appendLog(`Quét profile ${label} thất bại: ${error.message || error}`, "error");
     throw error;
@@ -2786,9 +2890,11 @@ async function publishState() {
     "savedReelLinks",
     "savedReelItems",
     "lastCrawlSource",
-    "lastCrawlTime"
+    "lastCrawlTime",
+    "channelStats"
   ]);
   const state = {
+    channelStats: data.channelStats || {},
     queue: data.queue || [],
     logs: data.logs || [],
     savedReelLinks: data.savedReelLinks || [],

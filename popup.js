@@ -28,6 +28,7 @@ const state = {
   logs: [],
   savedReelLinks: [],
   savedReelItems: [],
+  channelStats: {},
   lastCrawlSource: "",
   lastCrawlTime: 0,
   running: false,
@@ -60,6 +61,9 @@ const els = {
   badge: document.getElementById("runBadge"),
   themeToggle: document.getElementById("themeToggle"),
   langToggle: document.getElementById("langToggle"),
+  statsList: document.getElementById("statsList"),
+  exportStats: document.getElementById("exportStatsBtn"),
+  clearStats: document.getElementById("clearStatsBtn"),
   clearData: document.getElementById("clearDataBtn")
 };
 
@@ -77,6 +81,7 @@ function init() {
     "theme",
     "savedReelLinks",
     "savedReelItems",
+    "channelStats",
     "lastCrawlSource",
     "lastCrawlTime",
     "lastCrawlMax",
@@ -92,6 +97,7 @@ function init() {
     state.logs = data.logs || [];
     state.savedReelLinks = data.savedReelLinks || [];
     state.savedReelItems = data.savedReelItems || state.savedReelLinks.map((link) => ({ link, views: 0, viewText: "" }));
+    state.channelStats = data.channelStats || {};
     state.lastCrawlSource = data.lastCrawlSource || "";
     state.lastCrawlTime = data.lastCrawlTime || 0;
     state.running = data.runState?.running || false;
@@ -113,6 +119,7 @@ function init() {
     if (changes.logs) state.logs = changes.logs.newValue || [];
     if (changes.savedReelLinks) state.savedReelLinks = changes.savedReelLinks.newValue || [];
     if (changes.savedReelItems) state.savedReelItems = changes.savedReelItems.newValue || [];
+    if (changes.channelStats) state.channelStats = changes.channelStats.newValue || {};
     if (changes.lastCrawlSource) state.lastCrawlSource = changes.lastCrawlSource.newValue || "";
     if (changes.lastCrawlTime) state.lastCrawlTime = changes.lastCrawlTime.newValue || 0;
     if (changes.runState) {
@@ -135,6 +142,8 @@ function init() {
   els.exportLog.addEventListener("click", exportLogs);
   els.themeToggle.addEventListener("click", toggleTheme);
   els.langToggle.addEventListener("click", toggleLang);
+  els.exportStats.addEventListener("click", exportStatsCsv);
+  els.clearStats.addEventListener("click", clearStats);
   els.clearData.addEventListener("click", clearAllData);
 }
 
@@ -878,6 +887,98 @@ function render() {
 
   renderQueue();
   renderLogs();
+  renderStats();
+}
+
+function sortedStats() {
+  return Object.values(state.channelStats || {}).sort((a, b) => (b.lastCrawlTime || 0) - (a.lastCrawlTime || 0));
+}
+
+function renderStats() {
+  const channels = sortedStats();
+  if (!channels.length) {
+    els.statsList.className = "stats-list empty";
+    els.statsList.textContent = t("Chưa có thống kê. Quét một kênh để bắt đầu.");
+    els.exportStats.disabled = true;
+    els.clearStats.disabled = true;
+    return;
+  }
+
+  els.exportStats.disabled = false;
+  els.clearStats.disabled = false;
+  els.statsList.className = "stats-list";
+  els.statsList.innerHTML = channels.map((channel) => {
+    const maxTop = channel.top?.[0]?.views || 1;
+    const top = (channel.top || []).map((video, index) => `
+      <a href="${escapeHtml(video.link)}" target="_blank" rel="noopener" title="${escapeHtml(video.link)}">
+        <i>#${index + 1}</i>
+        <span class="bar"><b style="width:${Math.max(4, Math.round(video.views / maxTop * 100))}%"></b><em>${escapeHtml(shortLink(video.link))}</em></span>
+        <span>${escapeHtml(video.viewText || formatNumber(video.views))}</span>
+      </a>`).join("");
+    const previous = channel.history?.length > 1 ? channel.history[channel.history.length - 2] : null;
+    const trend = previous ? `
+      <div class="stats-trend">${escapeHtml(t("So với lần quét trước:"))}
+        ${trendChip(channel.followers - previous.followers, t("follower"))}
+        ${trendChip(channel.totalViews - previous.totalViews, t("view"))}
+      </div>` : "";
+    return `
+      <article class="stats-card">
+        <div class="stats-head">
+          <strong><a href="${escapeHtml(channel.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(channel.name || channel.sourceUrl)}</a></strong>
+          <span class="platform">${escapeHtml(channel.platform)} · ${new Date(channel.lastCrawlTime).toLocaleDateString()}</span>
+        </div>
+        <div class="stats-grid">
+          <div><span>${escapeHtml(channel.followersText || (channel.followers ? formatNumber(channel.followers) : "—"))}</span><small>${escapeHtml(t("Follower"))}</small></div>
+          <div><span>${channel.videoCount}</span><small>${escapeHtml(t("Video quét"))}</small></div>
+          <div><span>${escapeHtml(formatNumber(channel.totalViews))}</span><small>${escapeHtml(t("Tổng view"))}</small></div>
+          <div><span>${escapeHtml(formatNumber(channel.avgViews))}</span><small>${escapeHtml(t("View TB"))}</small></div>
+        </div>
+        <div class="stats-top">${top || `<small>${escapeHtml(t("Không đọc được view của video nào."))}</small>`}</div>
+        ${trend}
+      </article>`;
+  }).join("");
+}
+
+function trendChip(delta, unit) {
+  if (!delta) return `<span>±0 ${escapeHtml(unit)}</span>`;
+  const sign = delta > 0 ? "+" : "−";
+  return `<span class="${delta > 0 ? "up" : "down"}">${sign}${escapeHtml(formatNumber(Math.abs(delta)))} ${escapeHtml(unit)}</span>`;
+}
+
+function shortLink(link) {
+  try {
+    const url = new URL(link);
+    return url.pathname.split("/").filter(Boolean).slice(-2).join("/") || url.hostname;
+  } catch (_) {
+    return link;
+  }
+}
+
+function exportStatsCsv() {
+  const rows = [["channel", "platform", "name", "followers", "likes", "videos", "total_views", "avg_views", "last_crawl", "top1", "top1_views", "top2", "top2_views", "top3", "top3_views"]];
+  for (const channel of sortedStats()) {
+    const top = channel.top || [];
+    rows.push([
+      channel.sourceUrl, channel.platform, channel.name, channel.followers, channel.likes, channel.videoCount,
+      channel.totalViews, channel.avgViews, new Date(channel.lastCrawlTime).toISOString(),
+      top[0]?.link || "", top[0]?.views || "", top[1]?.link || "", top[1]?.views || "", top[2]?.link || "", top[2]?.views || ""
+    ]);
+  }
+  const csv = "\ufeff" + rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `mike-autodownload-stats-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function clearStats() {
+  if (!confirm(t("Xóa toàn bộ thống kê kênh?"))) return;
+  state.channelStats = {};
+  await chrome.storage.local.remove(["channelStats"]);
+  render();
 }
 
 function renderQueue() {

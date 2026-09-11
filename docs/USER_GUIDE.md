@@ -287,6 +287,10 @@ Trạng thái job đang chạy được lưu cục bộ để service worker có
 - YouTube chỉ tải được bản 360p (đôi khi 720p) có tiếng vì trình duyệt không ghép luồng hình/tiếng riêng; muốn 1080p cần công cụ desktop.
 - Nút **EN/VI** ở góc trên Side Panel và trang Cài đặt đổi ngôn ngữ toàn bộ giao diện, kể cả log đã ghi.
 
-## 23. Kiểm thử mã nguồn
+## 23. Thống kê kênh
+
+Sau mỗi lần **Quét link video**, bảng **Thống kê kênh** hiện: số follower/subscriber đọc trên trang kênh, số video quét được, tổng view, view trung bình, top 5 video nhiều view nhất (bấm để mở) và mức tăng/giảm so với lần quét trước của cùng kênh. Quét lại định kỳ để theo dõi tăng trưởng. **Xuất CSV** lưu toàn bộ kênh đã thống kê; **Xóa** xoá thống kê (không ảnh hưởng danh sách tải).
+
+## 24. Kiểm thử mã nguồn
 
 Chạy `npm run check` (Node 22+) để kiểm tra cú pháp và hợp đồng MV3 (manifest, quyền, thông điệp runtime).

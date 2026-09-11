@@ -50,6 +50,19 @@ const EN = {
   "Đã lưu cài đặt.": "Settings saved.",
   "Không thể lưu: {}": "Could not save: {}",
 
+  "Thống kê kênh": "Channel stats",
+  "Xuất CSV": "Export CSV",
+  "Chưa có thống kê. Quét một kênh để bắt đầu.": "No stats yet. Crawl a channel to begin.",
+  "Xóa toàn bộ thống kê kênh?": "Clear all channel stats?",
+  "So với lần quét trước:": "Since last crawl:",
+  "follower": "followers",
+  "view": "views",
+  "Follower": "Followers",
+  "Video quét": "Videos",
+  "Tổng view": "Total views",
+  "View TB": "Avg views",
+  "Không đọc được view của video nào.": "No video view counts could be read.",
+
   // ---- popup.js
   "Sẵn sàng": "Ready",
   "Đang chạy": "Running",

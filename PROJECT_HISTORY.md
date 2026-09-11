@@ -29,6 +29,10 @@
 - Applied a "Royal Blue & Gold" color scheme for buttons, icons, and headings.
 - Cleaned up the old packaged artifacts from `dist/`.
 
+## 2026-09-11 Channel Stats Dashboard (v1.6.0)
+- After each crawl the worker reads the profile header (followers/likes via `readProfileHeaderInPage`) and aggregates per-channel stats (`recordChannelStats` → `storage.channelStats`, last 50 channels, 30-point history).
+- Popup panel "Thống kê kênh": followers, videos, total/avg views, top 5 with bars, delta vs previous crawl, CSV export.
+
 ## 2026-09-11 YouTube/Bilibili + Bilingual UI (v1.5.0)
 - YouTube route: native progressive formats (itag 18/22) from the watch page, then savefrom.net (hidden `a.link-download` with audio). Bilibili route: snapany.com (direct bilivideo mp4).
 - `i18n.js`: Vietnamese→English pattern dictionary applied at render time; EN/VI toggle in popup and options; `_locales` for the short manifest description.

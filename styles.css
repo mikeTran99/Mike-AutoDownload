@@ -831,3 +831,26 @@ button:disabled {
     transform: none;
   }
 }
+
+/* ---- Thống kê kênh */
+.stats-list.empty { padding: 14px; font-size: 12px; opacity: 0.75; }
+.stats-card { padding: 12px 0; border-bottom: 1px solid #8884; }
+.stats-card:last-child { border-bottom: 0; }
+.stats-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.stats-head strong { font-size: 13px; overflow-wrap: anywhere; }
+.stats-head a { color: inherit; text-decoration: none; }
+.stats-head .platform { font-size: 10px; text-transform: uppercase; color: var(--gold-primary); white-space: nowrap; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+.stats-grid div { text-align: center; padding: 8px 4px; border-radius: var(--border-radius-md); background: var(--bg-main); box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
+.stats-grid span { display: block; font-size: 16px; font-weight: 800; color: var(--gold-primary); }
+:root.light-theme .stats-grid span { color: var(--gold-dark); }
+.stats-grid small { font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
+.stats-top { display: grid; gap: 5px; }
+.stats-top a { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; font-size: 11px; color: inherit; text-decoration: none; }
+.stats-top a > i { font-style: normal; font-weight: 700; color: var(--gold-primary); }
+.stats-top .bar { position: relative; height: 16px; border-radius: 6px; background: var(--bg-main); overflow: hidden; }
+.stats-top .bar b { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, var(--blue-dark, #1e40af), var(--blue-light, #3b82f6)); border-radius: 6px; }
+.stats-top .bar em { position: absolute; left: 6px; top: 0; line-height: 16px; font-style: normal; font-size: 10px; white-space: nowrap; overflow: hidden; max-width: calc(100% - 8px); text-overflow: ellipsis; }
+.stats-trend { font-size: 10.5px; margin-top: 6px; opacity: 0.85; }
+.stats-trend .up { color: var(--success); }
+.stats-trend .down { color: var(--danger); }
