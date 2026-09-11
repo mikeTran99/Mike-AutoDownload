@@ -29,6 +29,11 @@
 - Applied a "Royal Blue & Gold" color scheme for buttons, icons, and headings.
 - Cleaned up the old packaged artifacts from `dist/`.
 
+## 2026-09-11 Rebrand to Mike-Autodownload
+- Extension renamed from `Mike-AutomationAI` to `Mike-Autodownload` across manifest, UI, docs, PDF, tests and tooling.
+- New logo (`docs/logo.png`) → regenerated `icons/mike-*.png` with circular transparent mask; removed unused `icon-128.svg`.
+- Removed the media-capture panel and `webRequest` permission.
+
 ## 2026-05-12 Channel Crawler Upgrade
 - Reintroduced the Version 2 Facebook Reels / TikTok profile crawler into the current Mike-AutomationAI build.
 - Added popup controls for channel URL, maximum videos, minimum view filter, saved crawler count, and loading the latest saved crawl.

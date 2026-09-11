@@ -1,11 +1,13 @@
-# Mike-AutomationAI
+<p align="center"><img src="docs/logo.png" alt="Mike-Autodownload" width="160"></p>
 
-Mike-AutomationAI là Chrome Extension Manifest V3 giúp tải hàng loạt video từ Facebook, TikTok, Instagram, Douyin qua SO9 Downloader, quét profile/kênh công khai đa nền tảng và tải các video trực tiếp hợp lệ mà người dùng có quyền truy cập.
+# Mike-Autodownload
+
+Mike-Autodownload là Chrome Extension Manifest V3 giúp tải hàng loạt video từ Facebook, TikTok, Instagram, Douyin qua SO9 Downloader, quét profile/kênh công khai đa nền tảng và tải các video trực tiếp hợp lệ mà người dùng có quyền truy cập.
 
 ## Tài liệu sử dụng
 
 - Hướng dẫn chi tiết: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
-- Bản PDF: [output/pdf/Mike-AutomationAI-Huong-dan-su-dung.pdf](output/pdf/Mike-AutomationAI-Huong-dan-su-dung.pdf)
+- Bản PDF: [output/pdf/Mike-Autodownload-Huong-dan-su-dung.pdf](output/pdf/Mike-Autodownload-Huong-dan-su-dung.pdf)
 - Chính sách quyền riêng tư: [PRIVACY.md](PRIVACY.md)
 
 ## Tính năng chính
@@ -27,7 +29,7 @@ Mike-AutomationAI là Chrome Extension Manifest V3 giúp tải hàng loạt vide
 3. Bật `Developer mode`.
 4. Bấm `Load unpacked`.
 5. Chọn thư mục chứa file `manifest.json`.
-6. Ghim icon `Mike-AutomationAI` trên thanh công cụ Chrome.
+6. Ghim icon `Mike-Autodownload` trên thanh công cụ Chrome.
 
 Extension yêu cầu Chrome 114 trở lên vì sử dụng Side Panel API. Sau khi sửa `manifest.json`, hãy reload unpacked extension trong `chrome://extensions`.
 

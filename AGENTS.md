@@ -1,15 +1,15 @@
-# Mike-AutomationAI Project Rules
+# Mike-Autodownload Project Rules
 
 ## Project Context
-- This repository is a Chrome Manifest V3 extension named `Mike-AutomationAI`.
+- This repository is a Chrome Manifest V3 extension named `Mike-Autodownload`.
 - The extension batch-downloads Facebook, TikTok, Instagram, and Douyin video links through SO9 Downloader pages.
 - The current working directory is `D:\autodowload`.
-- The current logo source is `E:\3_JOBS\MechaMike.jpg`; extension icons are generated under `icons/mike-16.png`, `icons/mike-32.png`, `icons/mike-48.png`, and `icons/mike-128.png`.
+- Logo artwork: `docs/logo.png` (512px). Extension icons are generated from it under `icons/mike-16.png`, `icons/mike-32.png`, `icons/mike-48.png`, and `icons/mike-128.png` (circular mask, transparent corners).
 
 ## Current Known Good State
 - On 2026-05-10 Asia/Saigon, the user confirmed the tool is working smoothly after the logo and SO9 automation fixes.
-- Keep the extension name as `Mike-AutomationAI`.
-- Do not restore any legacy branding from the pre-`Mike-AutomationAI` build.
+- Keep the extension name as `Mike-Autodownload`.
+- Do not restore any legacy branding (`Mike-AutomationAI`, `KINGAUTOMATIONAI`, `SO9 Luxury Downloader`).
 - Keep the current SO9 automation architecture:
   - `content-script.js` prepares the SO9 page and returns a download candidate.
   - `service-worker.js` prefers `chrome.downloads.download` for direct URLs.

@@ -11,7 +11,7 @@ import {
 } from "./helpers/project.mjs";
 
 const RUNTIME_FILES = ["popup.js", "service-worker.js", "content-script.js", "options.js"];
-const EXPECTED_BRAND = "Mike-AutomationAI";
+const EXPECTED_BRAND = "Mike-Autodownload";
 
 test("all extension JavaScript passes the Node syntax parser", () => {
   for (const relativePath of RUNTIME_FILES) {
@@ -52,10 +52,10 @@ test("primary UI and documentation surfaces keep the current brand", async () =>
 
   assert.equal(manifest.name, EXPECTED_BRAND);
   assert.equal(manifest.action?.default_title, EXPECTED_BRAND);
-  assert.match(popupHtml, /<title>\s*Mike-AutomationAI\s*<\/title>/i);
-  assert.match(optionsHtml, /<title>[^<]*Mike-AutomationAI[^<]*<\/title>/i);
-  assert.match(readme, /^# Mike-AutomationAI\s*$/m);
-  assert.match(userGuide, /^# [^\n]*Mike-AutomationAI\s*$/m);
+  assert.match(popupHtml, /<title>\s*Mike-Autodownload\s*<\/title>/i);
+  assert.match(optionsHtml, /<title>[^<]*Mike-Autodownload[^<]*<\/title>/i);
+  assert.match(readme, /^# Mike-Autodownload\s*$/m);
+  assert.match(userGuide, /^# [^\n]*Mike-Autodownload\s*$/m);
 });
 
 test("SO9 path prefers a direct URL and arms fallback listeners before clicking", async () => {

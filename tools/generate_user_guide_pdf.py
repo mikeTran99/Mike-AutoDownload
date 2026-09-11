@@ -25,7 +25,7 @@ from reportlab.platypus import (
 
 ROOT = Path(__file__).resolve().parents[1]
 GUIDE = ROOT / "docs" / "USER_GUIDE.md"
-OUTPUT = ROOT / "output" / "pdf" / "Mike-AutomationAI-Huong-dan-su-dung.pdf"
+OUTPUT = ROOT / "output" / "pdf" / "Mike-Autodownload-Huong-dan-su-dung.pdf"
 ICON = ROOT / "icons" / "mike-128.png"
 
 
@@ -277,7 +277,7 @@ def table_flowable(rows: list[str]) -> Table:
 
 def build_story(markdown: str):
     story = []
-    title = "Hướng Dẫn Sử Dụng Mike-AutomationAI"
+    title = "Hướng Dẫn Sử Dụng Mike-Autodownload"
     lines = markdown.splitlines()
 
     for line in lines:
@@ -292,7 +292,7 @@ def build_story(markdown: str):
         story.append(img)
         story.append(Spacer(1, 7 * mm))
     story.append(Paragraph(inline(title), STYLES["CoverTitle"]))
-    story.append(Paragraph("Mike-AutomationAI 1.2.0", STYLES["CoverSub"]))
+    story.append(Paragraph("Mike-Autodownload 1.2.0", STYLES["CoverSub"]))
     story.append(Paragraph("Tài liệu hướng dẫn cài đặt, vận hành, xử lý lỗi và sử dụng có trách nhiệm", STYLES["CoverSub"]))
     story.append(Paragraph("Cập nhật: 2026-07-02", STYLES["CoverSub"]))
     story.append(PageBreak())
@@ -367,7 +367,7 @@ def build_story(markdown: str):
 def draw_footer(canvas, doc):
     canvas.saveState()
     width, _ = A4
-    footer = "Mike-AutomationAI - Hướng dẫn sử dụng"
+    footer = "Mike-Autodownload - Hướng dẫn sử dụng"
     page = f"Trang {doc.page}"
     canvas.setFont(FONT, 8)
     canvas.setFillColor(colors.HexColor("#6b7280"))
@@ -386,9 +386,9 @@ def main() -> None:
         leftMargin=18 * mm,
         topMargin=17 * mm,
         bottomMargin=18 * mm,
-        title="Hướng dẫn sử dụng Mike-AutomationAI",
-        author="Mike-AutomationAI",
-        subject="Tài liệu hướng dẫn sử dụng Chrome extension Mike-AutomationAI",
+        title="Hướng dẫn sử dụng Mike-Autodownload",
+        author="Mike-Autodownload",
+        subject="Tài liệu hướng dẫn sử dụng Chrome extension Mike-Autodownload",
     )
     doc.build(build_story(markdown), onFirstPage=draw_footer, onLaterPages=draw_footer)
     print(OUTPUT)

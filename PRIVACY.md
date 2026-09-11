@@ -1,8 +1,8 @@
-# Chính sách quyền riêng tư — Mike-AutomationAI
+# Chính sách quyền riêng tư — Mike-Autodownload
 
 Ngày hiệu lực: 10/09/2026
 
-Mike-AutomationAI là tiện ích Chrome hỗ trợ người dùng tải video, âm thanh và ảnh mà họ có quyền truy cập và được phép tải. Tiện ích không được thiết kế để vượt qua DRM, paywall, đăng nhập, quyền riêng tư, hạn chế tải xuống hoặc cơ chế bảo vệ nội dung.
+Mike-Autodownload là tiện ích Chrome hỗ trợ người dùng tải video, âm thanh và ảnh mà họ có quyền truy cập và được phép tải. Tiện ích không được thiết kế để vượt qua DRM, paywall, đăng nhập, quyền riêng tư, hạn chế tải xuống hoặc cơ chế bảo vệ nội dung.
 
 ## Dữ liệu được xử lý
 

@@ -1352,7 +1352,7 @@ async function runQueue(folder, runId) {
 
   const wasStopped = stopped || currentJob.cancelRequested;
   await appendLog(wasStopped ? "Tiến trình đã dừng." : "Đã xử lý xong danh sách.", wasStopped ? "warn" : "info");
-  notify("Mike-AutomationAI", wasStopped ? "Tiến trình đã dừng." : "Đã xử lý xong danh sách link.");
+  notify("Mike-Autodownload", wasStopped ? "Tiến trình đã dừng." : "Đã xử lý xong danh sách link.");
   await finishRun(runId, wasStopped);
   await publishState();
 }

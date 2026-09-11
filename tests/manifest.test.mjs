@@ -9,7 +9,7 @@ import {
   readProjectFile
 } from "./helpers/project.mjs";
 
-const EXPECTED_BRAND = "Mike-AutomationAI";
+const EXPECTED_BRAND = "Mike-Autodownload";
 const EXPECTED_PERMISSIONS = [
   "alarms",
   "downloads",

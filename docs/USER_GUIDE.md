@@ -1,14 +1,14 @@
-# Hướng Dẫn Sử Dụng Mike-AutomationAI
+# Hướng Dẫn Sử Dụng Mike-Autodownload
 
 Phiên bản tài liệu: 1.0
 
 Ngày cập nhật: 2026-07-02
 
-Áp dụng cho extension: Mike-AutomationAI 1.3.2
+Áp dụng cho extension: Mike-Autodownload 1.3.2
 
 ## 1. Tổng quan
 
-Mike-AutomationAI là Chrome Extension Manifest V3 dùng để tải hàng loạt video theo danh sách link. Extension tự nhận diện nền tảng, đưa link Facebook/TikTok/Instagram/Douyin vào SO9 Downloader, ưu tiên tải bằng Chrome Download API khi SO9 trả về URL trực tiếp, và chỉ dùng thao tác click nút tải cuối của SO9 khi các listener tải file đã được gắn sẵn.
+Mike-Autodownload là Chrome Extension Manifest V3 dùng để tải hàng loạt video theo danh sách link. Extension tự nhận diện nền tảng, đưa link Facebook/TikTok/Instagram/Douyin vào SO9 Downloader, ưu tiên tải bằng Chrome Download API khi SO9 trả về URL trực tiếp, và chỉ dùng thao tác click nút tải cuối của SO9 khi các listener tải file đã được gắn sẵn.
 
 Extension phù hợp cho các tác vụ:
 
@@ -20,7 +20,7 @@ Extension phù hợp cho các tác vụ:
 
 ## 2. Nguyên tắc sử dụng có trách nhiệm
 
-Bạn chỉ nên tải nội dung mà bạn sở hữu, được chủ sở hữu cho phép, hoặc được phép tải theo điều khoản của nền tảng. Mike-AutomationAI không được thiết kế để vượt qua bảo vệ nội dung.
+Bạn chỉ nên tải nội dung mà bạn sở hữu, được chủ sở hữu cho phép, hoặc được phép tải theo điều khoản của nền tảng. Mike-Autodownload không được thiết kế để vượt qua bảo vệ nội dung.
 
 Extension không hỗ trợ và không có ý định hỗ trợ:
 
@@ -39,14 +39,14 @@ Extension không hỗ trợ và không có ý định hỗ trợ:
 
 ## 4. Cài đặt extension
 
-1. Tải source code Mike-AutomationAI về máy, hoặc clone từ GitHub.
+1. Tải source code Mike-Autodownload về máy, hoặc clone từ GitHub.
 2. Giải nén nếu bạn tải file ZIP.
 3. Mở Chrome.
 4. Vào `chrome://extensions`.
 5. Bật công tắc `Developer mode`.
 6. Bấm `Load unpacked`.
 7. Chọn đúng thư mục chứa file `manifest.json`.
-8. Kiểm tra extension hiện tên `Mike-AutomationAI`.
+8. Kiểm tra extension hiện tên `Mike-Autodownload`.
 9. Ghim icon extension trên thanh công cụ Chrome để mở nhanh popup.
 
 Nếu bạn cập nhật source code, hãy quay lại `chrome://extensions` và bấm nút reload của extension. Việc reload đặc biệt cần thiết khi thay đổi `manifest.json`, icon, hoặc `service-worker.js`.
@@ -101,7 +101,7 @@ Nên tránh để chú thích dính liền vào cuối URL. Nếu cần ghi chú
 
 ## 9. Tải hàng loạt bằng file
 
-1. Bấm icon `Mike-AutomationAI`.
+1. Bấm icon `Mike-Autodownload`.
 2. Trong vùng `Tải link lên`, bấm khu `Tải file link`.
 3. Chọn file `.txt` hoặc `.csv`.
 4. Kiểm tra `Tổng link` và `Danh sách link`.
@@ -252,7 +252,7 @@ Tên file sẽ được lấy từ SO9, URL trực tiếp, hoặc tên gợi ý 
 
 ## 20. Checklist test nhanh sau khi cài đặt
 
-1. Mở popup, thấy tên `Mike-AutomationAI` và badge `Sẵn sàng`.
+1. Mở popup, thấy tên `Mike-Autodownload` và badge `Sẵn sàng`.
 2. Dán một link TikTok public vào ô nhập tay.
 3. Bấm `Nạp link`.
 4. Nhập thư mục tải về `SO9-Downloads`.
@@ -276,7 +276,7 @@ node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8')); console
 Khi public repo, nên kiểm tra thêm:
 
 - Không có token, cookie, secret, private key, file tải về cá nhân.
-- Không khôi phục tên/branding cũ trước `Mike-AutomationAI`.
+- Không khôi phục tên/branding cũ trước `Mike-Autodownload`.
 - Không thêm logic bypass DRM, paywall, login, Telegram permission, blob stream, HLS/DASH segment stitching.
 
 Trạng thái job đang chạy được lưu cục bộ để service worker có thể đối chiếu và phục hồi sau khi Chrome tạm dừng worker. Không bắt đầu quét kênh đồng thời với một queue đang tải; hãy chờ queue hiện tại kết thúc hoặc dừng trước khi quét lại.
