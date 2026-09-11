@@ -21,7 +21,12 @@ const EXPECTED_PERMISSIONS = [
 ];
 const EXPECTED_REQUIRED_HOSTS = [
   "https://facebook.com/*",
+  "https://snapdouyin.app/*",
+  "https://snapinsta.app/*",
+  "https://snapsave.app/*",
+  "https://snaptik.app/*",
   "https://so9.vn/*",
+  "https://ssstik.io/*",
   "https://tiktok.com/*",
   "https://www.facebook.com/*",
   "https://www.tiktok.com/*"
@@ -66,14 +71,24 @@ test("manifest references only project-local files that exist", async () => {
   }
 });
 
-test("content script injection stays restricted to the SO9 downloader", async () => {
+const DOWNLOADER_SITES = [
+  "https://so9.vn/9downloader/*",
+  "https://snaptik.app/*",
+  "https://ssstik.io/*",
+  "https://snapsave.app/*",
+  "https://snapinsta.app/*",
+  "https://snapdouyin.app/*"
+];
+
+test("content script injection stays restricted to the declared downloader sites", async () => {
   const manifest = await readManifest();
   const contentScripts = manifest.content_scripts || [];
   assert.ok(contentScripts.length > 0, "SO9 content script registration is required");
 
   const matches = contentScripts.flatMap((entry) => entry.matches || []);
   assert.ok(matches.includes("https://so9.vn/9downloader/*"));
-  assert.ok(matches.every((match) => match.startsWith("https://so9.vn/9downloader/")), `Unexpected content-script match: ${matches.join(", ")}`);
+  assert.ok(matches.every((match) => DOWNLOADER_SITES.includes(match)), `Unexpected content-script match: ${matches.join(", ")}`);
+  assert.ok(matches.every((match) => !/^https?:\/\/\*/.test(match)), "No wildcard-host content-script injection");
   assert.ok(contentScripts.some((entry) => entry.js?.includes("content-script.js")));
 });
 

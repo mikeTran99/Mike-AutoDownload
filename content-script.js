@@ -40,7 +40,7 @@ async function clickFinalDownload() {
     : await waitForDownloadCandidate(15000);
 
   if (!candidate?.element) {
-    throw new Error("Không tìm thấy nút tải file cuối trên SO9.");
+    throw new Error("Không tìm thấy nút tải file cuối trên trang downloader.");
   }
 
   clickLikeHuman(candidate.element);
@@ -130,7 +130,7 @@ async function waitForDownloadCandidate(timeoutMs) {
     await sleep(700);
   }
 
-  throw new Error("SO9 chưa tạo được file tải xuống trong thời gian chờ.");
+  throw new Error("Trang downloader chưa tạo được file tải xuống trong thời gian chờ.");
 }
 
 function findDownloadCandidate() {
@@ -151,7 +151,7 @@ function buildCandidate(element) {
     containerText.includes("tai xuong") && containerText.includes("so9");
   const isDirect = isDirectMediaUrl(href);
   const isBlob = href.startsWith("blob:");
-  const isPlainInitialButton = /^tai\s*xuong$/.test(normalizedText) && !hasResultContext && !href;
+  const isPlainInitialButton = /^(tai\s*xuong|download)$/.test(normalizedText) && !hasResultContext && !href;
 
   if (isPlainInitialButton) return null;
 
@@ -162,6 +162,9 @@ function buildCandidate(element) {
   if (normalizedText.includes("download") || normalizedText.includes("tai xuong")) score += 30;
   if (element.hasAttribute("download")) score += 25;
   if (element.querySelector("svg,img")) score += 10;
+  // Ưu tiên video HD/không watermark; loại nút MP3, ảnh bìa, story ảnh trên các site dự phòng.
+  if (/\b(hd|no\s*watermark|khong\s*logo)\b/.test(normalizedText)) score += 15;
+  if (/\b(mp3|audio|nhac|photo|image|cover|thumbnail|jpg)\b/.test(`${normalizedText} ${href.split("?")[0]}`)) score -= 80;
 
   if (score < 50) return null;
 
@@ -243,7 +246,7 @@ function detectPageError() {
   ];
   const matched = invalidPatterns.find((pattern) => text.includes(pattern));
   if (!matched) return "";
-  return "SO9 báo link không hợp lệ hoặc không thể tải link này.";
+  return "Trang downloader báo link không hợp lệ hoặc không thể tải link này.";
 }
 
 async function typeLikeHuman(input, value) {

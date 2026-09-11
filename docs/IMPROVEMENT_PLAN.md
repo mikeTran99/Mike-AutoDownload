@@ -59,10 +59,8 @@ G-Labs là **app desktop Electron + yt-dlp đóng gói, mã nguồn đóng** (re
 
 ### Phase 0 — Sửa lỗi nền tảng (bắt buộc, ~1 ngày)
 
-- [x] **B1+B3**: `onStartup`/`onInstalled` → `resetRunState()`; popup gửi `GET_STATE` khi mở. (2026-09-11)
-- [x] **B2**: `setInterval(chrome.runtime.getPlatformInfo, 20s)` trong lúc chạy — không cần permission `alarms`. (2026-09-11)
+- [x] **B1/B2/B3**: bản `main` đã có job state bền vững + `alarms` resume (phiên trước) — thay thế hoàn toàn fix keepalive/GET_STATE của worktree. (2026-09-11)
 - [x] **B5**: Phát hiện `runQueue` đã tự chạy lại item `failed` khi bấm Start → không thêm nút; log báo số link lỗi sẽ thử lại. (2026-09-11)
-- [x] "Xóa dữ liệu cũ" hoạt động khi SW xác nhận không chạy (qua `GET_STATE`). (2026-09-11)
 - [x] **B10 một phần — chuỗi nguồn dự phòng**: `BACKENDS` = native (JSON trong trang gốc) → SO9 → snaptik/ssstik/snapsave/snapinsta/snapdouyin. (2026-09-11)
 
 ### Phase 1 — Dọn cấu trúc, không đổi hành vi (~1 ngày)

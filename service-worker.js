@@ -4,6 +4,16 @@ const JOB_SCHEMA_VERSION = 1;
 const RUNNER_ALARM = "mike-automation-runner";
 const MAX_ITEM_ATTEMPTS = 2;
 
+// Thứ tự nguồn tải cho từng nền tảng. "native" = đọc URL video ngay trên trang gốc
+// (dùng phiên đăng nhập Chrome hiện tại); còn lại là trang downloader bên thứ ba.
+// Nguồn nào lỗi thì chuyển sang nguồn kế tiếp.
+const BACKENDS = {
+  facebook: ["native", "https://so9.vn/9downloader/facebook", "https://snapsave.app/"],
+  tiktok: ["https://so9.vn/9downloader/tiktok", "native", "https://snaptik.app/", "https://ssstik.io/"],
+  instagram: ["https://so9.vn/9downloader/insta", "https://snapinsta.app/"],
+  douyin: ["https://so9.vn/9downloader/douyin", "https://snapdouyin.app/"]
+};
+
 let runLock = false;
 let crawlLock = false;
 let crawlCancelRequested = false;
@@ -1485,16 +1495,49 @@ async function processItem(item, downloadFolder, deadlineAt, runId) {
     return await processTelegramItem(item, downloadFolder, deadlineAt, runId);
   }
 
-  return await processSo9Item(item, downloadFolder, deadlineAt, runId);
+  return await processPlatformItem(item, downloadFolder, deadlineAt, runId);
 }
 
-async function processSo9Item(item, downloadFolder, deadlineAt, runId) {
-  const tab = await chrome.tabs.create({ url: item.downloaderUrl, active: false });
-  await trackActiveTab(tab.id, item.downloaderUrl, "loading-so9");
+async function processPlatformItem(item, downloadFolder, deadlineAt, runId) {
+  const chain = BACKENDS[item.platform] || [item.downloaderUrl];
+  let lastError = null;
+
+  for (const backend of chain) {
+    assertRunActive(runId);
+    if (remainingMs(deadlineAt) < 5000) break;
+    try {
+      if (backend === "native") {
+        await appendLog("Đang đọc URL video ngay trên trang gốc.", "info");
+        return await processDirectMediaPage(item, downloadFolder, deadlineAt, runId);
+      }
+      return await processSo9Item(item, downloadFolder, deadlineAt, runId, backend);
+    } catch (error) {
+      lastError = error;
+      if (/RUN_(?:STOPPED|REPLACED)|USER_CANCELED|PERMISSION/.test(error?.message || "")) throw error;
+      await appendLog(`${backendLabel(backend)} thất bại: ${formatDownloadError(error)}. Thử nguồn tiếp theo.`, "warn");
+    }
+  }
+
+  throw lastError || new Error("Hết thời gian trước khi thử nguồn tải.");
+}
+
+function backendLabel(backend) {
+  if (backend === "native") return "Trang gốc";
+  try {
+    return new URL(backend).hostname.replace(/^www\./, "");
+  } catch (_) {
+    return backend;
+  }
+}
+
+async function processSo9Item(item, downloadFolder, deadlineAt, runId, backendUrl = item.downloaderUrl) {
+  const site = backendLabel(backendUrl);
+  const tab = await chrome.tabs.create({ url: backendUrl, active: false });
+  await trackActiveTab(tab.id, backendUrl, "loading-so9");
 
   try {
     await waitForTabComplete(tab.id, remainingMs(deadlineAt), runId);
-    await appendLog("Đã mở SO9 downloader ở chế độ nền.", "info");
+    await appendLog(`Đã mở ${site} ở chế độ nền.`, "info");
     await updateJobState({ stage: "preparing-so9" });
 
     const prepared = await sendContentMessageWithRetry(tab.id, {
@@ -1502,7 +1545,7 @@ async function processSo9Item(item, downloadFolder, deadlineAt, runId) {
       link: item.link
     }, Math.min(90000, remainingMs(deadlineAt)));
 
-    await appendLog("Đã nhập link và tạo file trên SO9.", "info");
+    await appendLog(`Đã nhập link và tạo file trên ${site}.`, "info");
 
     if (prepared.directUrl && !prepared.isBlobUrl) {
       await appendLog("Đang tải bằng Chrome API.", "info");
@@ -1510,20 +1553,20 @@ async function processSo9Item(item, downloadFolder, deadlineAt, runId) {
     }
 
     if (prepared.canFallbackClick) {
-      await appendLog("Fallback click nút tải SO9.", "warn");
+      await appendLog(`Fallback click nút tải trên ${site}.`, "warn");
       await updateJobState({ stage: "waiting-fallback-download" });
       return await waitForDownloadTriggered({
         downloadFolder,
         timeoutMs: remainingMs(deadlineAt),
         runId,
-        expectedHosts: ["so9.vn"],
+        expectedHosts: [site],
         triggerDownload: async () => {
           await sendContentMessageWithRetry(tab.id, { type: "CLICK_FINAL_DOWNLOAD" }, Math.min(15000, remainingMs(deadlineAt)));
         }
       });
     }
 
-    throw new Error(prepared.pageError || "SO9 đã xử lý link nhưng không trả về URL hoặc nút tải.");
+    throw new Error(prepared.pageError || `${site} đã xử lý link nhưng không trả về URL hoặc nút tải.`);
   } finally {
     await closeTrackedTab(tab.id);
   }
@@ -2187,6 +2230,22 @@ function collectDirectMediaCandidates() {
         source: `data-${name}`
       });
     }
+  }
+
+  // JSON nhúng trong <script> của Facebook (browser_native_hd_url), TikTok (playAddr), Instagram (video_url).
+  // ponytail: lấy theo thứ tự xuất hiện; trang video đơn thường đặt video chính trước tiên.
+  const scriptText = [...document.scripts].map((script) => script.textContent || "").join("\n");
+  const jsonKeyPattern = /"(browser_native_hd_url|browser_native_sd_url|playAddr|video_url)"\s*:\s*"(https?:[^"]+)"/g;
+  const keyQuality = { browser_native_hd_url: "1080p", browser_native_sd_url: "480p", playAddr: "720p", video_url: "720p" };
+  const pageTitle = (document.title || "video").replace(/\s*[|\-\u2013]\s*(Facebook|TikTok|Instagram|Douyin).*$/i, "").slice(0, 80);
+  for (const match of scriptText.matchAll(jsonKeyPattern)) {
+    const url = match[2].replace(/\\u0026/g, "&").replace(/\\\//g, "/").replace(/\\"/g, '"');
+    addCandidate(url, {
+      label: `${pageTitle} ${keyQuality[match[1]]}`,
+      filename: `${pageTitle}.mp4`,
+      mime: "video/mp4",
+      source: `script-${match[1]}`
+    });
   }
 
   for (const entry of performance.getEntriesByType("resource")) {

@@ -29,6 +29,10 @@
 - Applied a "Royal Blue & Gold" color scheme for buttons, icons, and headings.
 - Cleaned up the old packaged artifacts from `dist/`.
 
+## 2026-09-11 Backend Fallback Chain (v1.4.0)
+- Download chain per platform (`BACKENDS` in `service-worker.js`): native page JSON (`browser_native_hd_url`, `playAddr`, `video_url`) → SO9 → alternative downloader sites. Failures fall through to the next source.
+- Content script scoring prefers HD/no-watermark links and skips MP3/photo buttons on the alternative sites.
+
 ## 2026-09-11 Rebrand to Mike-Autodownload
 - Extension renamed from `Mike-AutomationAI` to `Mike-Autodownload` across manifest, UI, docs, PDF, tests and tooling.
 - New logo (`docs/logo.png`) → regenerated `icons/mike-*.png` with circular transparent mask; removed unused `icon-128.svg`.
