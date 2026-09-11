@@ -4,7 +4,7 @@ Phiên bản tài liệu: 1.0
 
 Ngày cập nhật: 2026-07-02
 
-Áp dụng cho extension: Mike-AutomationAI 1.2.0
+Áp dụng cho extension: Mike-AutomationAI 1.3.2
 
 ## 1. Tổng quan
 
@@ -122,11 +122,11 @@ Với Facebook, TikTok, Instagram và Douyin, extension sẽ mở SO9 tương �
 
 Cách này phù hợp khi bạn chỉ có vài link hoặc muốn test nhanh một link public.
 
-## 11. Quét kênh Facebook Reels
+## 11. Quét kênh/profile đa nền tảng
 
 1. Dán link page/profile Facebook vào ô `Link kênh Facebook / TikTok`.
 2. Extension sẽ tự chuẩn hóa đường dẫn sang khu Reels nếu hợp lệ.
-3. Nhập `Số lượng`, từ 1 đến 500.
+3. Nhập `Số lượng` là số nguyên dương (ví dụ 1000, 5000), hoặc để trống để quét toàn bộ Reels mà Facebook tải được trong quá trình cuộn. Không còn giới hạn 500.
 4. Nhập `View tối thiểu` nếu muốn lọc, ví dụ `10000`.
 5. Bấm `Quét link video`.
 6. Extension mở Facebook, cuộn trang, thu thập Reels, bỏ qua link trùng lặp và video dưới ngưỡng view.
@@ -137,12 +137,29 @@ Nếu Facebook yêu cầu đăng nhập, checkpoint, hoặc chặn cuộn trang,
 ## 12. Quét kênh TikTok profile
 
 1. Dán link profile TikTok, ví dụ `https://www.tiktok.com/@example`.
-2. Nhập số lượng video cần quét.
+2. Nhập số lượng video cần quét là số nguyên dương, hoặc để trống để quét toàn bộ video mà TikTok tải được trong quá trình cuộn. Không còn giới hạn 500.
 3. Nhập view tối thiểu nếu cần.
 4. Bấm `Quét link video`.
 5. Extension mở profile, cuộn trang, đọc link video, đọc view nếu TikTok render được, và đưa link hợp lệ vào queue tải.
 
+Khi chọn chế độ để trống, extension không áp dụng giới hạn số lượng cố định; crawler sẽ dừng khi không xuất hiện link mới sau nhiều vòng cuộn liên tiếp để tránh chạy vô hạn trên feed động.
+
 Nếu TikTok hiện captcha, yêu cầu xác minh, hoặc không render view, kết quả có thể thiếu link hoặc hiện cảnh báo trong log. Hãy đăng nhập/hoàn thành xác minh trên Chrome trước khi quét lại.
+
+## 12.1. Quét Instagram và Douyin
+
+1. Dán link profile Instagram dạng `https://www.instagram.com/username/`, hoặc profile Douyin dạng `https://www.douyin.com/user/...`.
+2. Nếu Chrome hỏi quyền đọc website, chỉ cấp quyền khi bạn có quyền xem/tải nội dung trên profile đó.
+3. Để trống `Số lượng` để lấy toàn bộ link Reel/video mà trang cung cấp trong quá trình cuộn; hoặc nhập số nguyên dương bất kỳ để giới hạn. Với Instagram, link bài viết `/p/` là ứng viên: có thể chỉ chứa ảnh, không bảo đảm bài nào cũng có video.
+4. Extension sẽ chuẩn hóa link Reel/video, loại bỏ link trùng và đưa vào SO9 queue.
+
+Instagram/Douyin có thể yêu cầu tài khoản đăng nhập, giới hạn theo vùng, captcha hoặc không render toàn bộ video. Nếu trang không expose số view, link vẫn được giữ lại khi bạn đặt ngưỡng view để ưu tiên bắt đủ link; extension ghi cảnh báo số view chưa đọc được. Extension không bypass các hạn chế này và không tải blob/HLS/DRM stream.
+
+## 12.2. Bắt link Story
+
+Bạn có thể dán URL story Facebook hoặc Instagram vào khu vực `Dán link`. Extension sẽ mở story và quét `video`, `source`, metadata và resource công khai để tìm URL `.mp4`, `.m4v`, `.mov` hoặc `.webm`, sau đó tải bằng Chrome Download API.
+
+Story chỉ hoạt động khi video được trang expose thành URL trực tiếp và tài khoản hiện tại có quyền xem. Bộ quét tự loại favicon, sprite, reaction/icon và ảnh DOM quá nhỏ khỏi danh sách để tránh tải nhầm ảnh giao diện; ảnh nội dung đủ lớn vẫn được giữ lại. Nếu nền tảng chỉ cung cấp blob/MediaSource (MSE), HLS/DASH, DRM hoặc yêu cầu vượt qua quyền riêng tư, extension sẽ báo rõ và không cố bypass. Khi đó hãy phát story một lần rồi bấm `Quét lại trang` để bắt phần response file trực tiếp (nếu nền tảng có cung cấp).
 
 ## 13. Tải lại link đã quét
 
@@ -178,6 +195,8 @@ Với một trang web bất kỳ có chứa video công khai:
 3. Nếu bạn có quyền tải nội dung, bấm cho phép.
 4. Extension quét thẻ `video`, `source`, link tải trực tiếp và resource đã tải trong trang.
 5. Nếu tìm thấy URL video trực tiếp, extension tải bằng Chrome Download API.
+
+Tính năng quét trang media yêu cầu HTTPS và quyền host tùy chọn cho đúng origin. Link file video trực tiếp do người dùng nhập được xử lý riêng; extension không tự xin quyền đọc một trang HTTP.
 
 Extension không ghép HLS/DASH playlist (`.m3u8`, `.mpd`) và không tải blob stream.
 
@@ -259,3 +278,9 @@ Khi public repo, nên kiểm tra thêm:
 - Không có token, cookie, secret, private key, file tải về cá nhân.
 - Không khôi phục tên/branding cũ trước `Mike-AutomationAI`.
 - Không thêm logic bypass DRM, paywall, login, Telegram permission, blob stream, HLS/DASH segment stitching.
+
+Trạng thái job đang chạy được lưu cục bộ để service worker có thể đối chiếu và phục hồi sau khi Chrome tạm dừng worker. Không bắt đầu quét kênh đồng thời với một queue đang tải; hãy chờ queue hiện tại kết thúc hoặc dừng trước khi quét lại.
+
+## 22. Kiểm thử mã nguồn
+
+Chạy `npm run check` (Node 22+) để kiểm tra cú pháp và hợp đồng MV3 (manifest, quyền, thông điệp runtime).

@@ -27,7 +27,8 @@ const state = {
   lastCrawlSource: "",
   lastCrawlTime: 0,
   running: false,
-  paused: false
+  paused: false,
+  crawling: false
 };
 
 const els = {
@@ -75,7 +76,9 @@ function init() {
   ], (data) => {
     els.folder.value = data.downloadFolder || "SO9-Downloads";
     els.channelUrl.value = data.lastCrawlSource || "";
-    els.maxReels.value = data.lastCrawlMax || 50;
+    els.maxReels.value = data.lastCrawlMax === null || data.lastCrawlMax === undefined || data.lastCrawlMax === ""
+      ? ""
+      : data.lastCrawlMax;
     els.minViews.value = data.lastMinViews || 0;
     state.queue = data.queue || [];
     state.logs = data.logs || [];
@@ -86,19 +89,35 @@ function init() {
     state.running = data.runState?.running || false;
     state.paused = data.runState?.paused || false;
     if (data.theme === "light") document.documentElement.classList.add("light-theme");
-    render();
+    scheduleRender();
   });
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === "STATE_UPDATED") {
       Object.assign(state, message.state);
-      render();
+      scheduleRender();
     }
+  });
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") return;
+    if (changes.queue) state.queue = changes.queue.newValue || [];
+    if (changes.logs) state.logs = changes.logs.newValue || [];
+    if (changes.savedReelLinks) state.savedReelLinks = changes.savedReelLinks.newValue || [];
+    if (changes.savedReelItems) state.savedReelItems = changes.savedReelItems.newValue || [];
+    if (changes.lastCrawlSource) state.lastCrawlSource = changes.lastCrawlSource.newValue || "";
+    if (changes.lastCrawlTime) state.lastCrawlTime = changes.lastCrawlTime.newValue || 0;
+    if (changes.runState) {
+      state.running = Boolean(changes.runState.newValue?.running);
+      state.paused = Boolean(changes.runState.newValue?.paused);
+    }
+    scheduleRender();
   });
 
   els.file.addEventListener("change", handleFileUpload);
   els.importText.addEventListener("click", handleManualImport);
   els.crawl.addEventListener("click", crawlChannelVideos);
+  els.maxReels.addEventListener("input", () => els.maxReels.setCustomValidity(""));
   els.loadSaved.addEventListener("click", loadSavedReelsToQueue);
   els.folder.addEventListener("change", saveFolder);
   els.start.addEventListener("click", startRun);
@@ -111,7 +130,7 @@ function init() {
 }
 
 async function clearAllData() {
-  if (state.running) {
+  if (state.running || state.crawling) {
     addLog("Không thể xóa dữ liệu khi đang chạy.", "warn");
     render();
     return;
@@ -149,6 +168,7 @@ async function toggleTheme() {
 }
 
 async function handleFileUpload(event) {
+  if (state.running) return;
   const file = event.target.files?.[0];
   if (!file) return;
 
@@ -162,6 +182,7 @@ async function handleFileUpload(event) {
 }
 
 async function handleManualImport() {
+  if (state.running) return;
   const text = els.manualLinks.value.trim();
   if (!text) {
     addLog("Chưa có link để nạp.", "warn");
@@ -221,22 +242,38 @@ function buildQueueFromReelItems(items) {
 }
 
 async function crawlChannelVideos() {
+  if (state.running || state.crawling) return;
   const channel = normalizeChannelUrl(els.channelUrl.value);
   const maxCount = normalizeMaxReels(els.maxReels.value);
   const minViews = normalizeMinViews(els.minViews.value);
 
+  if (Number.isNaN(maxCount) || els.maxReels.validity.badInput) {
+    els.maxReels.setCustomValidity("Nhập số nguyên dương hợp lệ, hoặc để trống để lấy toàn bộ.");
+    els.maxReels.reportValidity();
+    return;
+  }
+
   if (!channel.url) {
-    addLog("Vui lòng nhập link kênh Facebook hoặc TikTok hợp lệ.", "warn");
+    addLog("Vui lòng nhập link kênh Facebook, TikTok, Instagram hoặc Douyin hợp lệ.", "warn");
+    await persist();
+    render();
+    return;
+  }
+
+  const permissionGranted = await ensureChannelPermission(channel);
+  if (!permissionGranted) {
+    addLog("Chrome chưa cấp quyền đọc trang cho profile này.", "warn");
     await persist();
     render();
     return;
   }
 
   els.channelUrl.value = channel.url;
-  els.maxReels.value = maxCount;
+  els.maxReels.value = maxCount ?? "";
   els.minViews.value = minViews;
-  els.crawl.disabled = true;
-  addLog(`Đang mở kênh ${channel.label} để quét tối đa ${maxCount} video, view tối thiểu ${formatNumber(minViews)}.`, "info");
+  state.crawling = true;
+  const crawlMode = maxCount === null ? "toàn bộ video tìm thấy" : `tối đa ${formatNumber(maxCount)} video`;
+  addLog(`Đang mở kênh ${channel.label} để quét ${crawlMode}, view tối thiểu ${formatNumber(minViews)}.`, "info");
   await persist();
   render();
 
@@ -269,15 +306,19 @@ async function crawlChannelVideos() {
     addLog(`Đã đưa ${state.queue.length} link ${channel.label} vào danh sách tải.`, "info");
     await chrome.storage.local.set({ logs: state.logs });
   } catch (error) {
-    addLog(`Quét kênh thất bại: ${error.message || error}`, "error");
+    const message = error.message || String(error);
+    addLog(message.includes("Đã dừng quét")
+      ? message
+      : `Quét kênh thất bại: ${message}`, message.includes("Đã dừng quét") ? "warn" : "error");
     await persist();
   } finally {
-    els.crawl.disabled = false;
+    state.crawling = false;
     render();
   }
 }
 
 async function loadSavedReelsToQueue() {
+  if (state.running || state.crawling) return;
   const data = await chrome.storage.local.get(["savedReelLinks", "savedReelItems", "lastCrawlSource", "lastCrawlTime"]);
   const links = data.savedReelLinks || [];
   const items = data.savedReelItems || links.map((link) => ({ link, views: 0, viewText: "" }));
@@ -311,6 +352,26 @@ function detectRoute(link) {
     if (!["http:", "https:"].includes(url.protocol)) return null;
 
     const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    const storyRoute = detectStoryRoute(url, hostname);
+    if (storyRoute) return storyRoute;
+    const instagramMediaRoute = detectInstagramMediaRoute(url, hostname);
+    if (instagramMediaRoute) return instagramMediaRoute;
+    if (normalizeInstagramChannelUrl(url.href)) {
+      return {
+        platform: "instagram",
+        strategy: "channel",
+        status: "unsupported",
+        message: "Đây là link profile; hãy dán vào ô Quét kênh để lấy toàn bộ video."
+      };
+    }
+    if (normalizeDouyinChannelUrl(url.href)) {
+      return {
+        platform: "douyin",
+        strategy: "channel",
+        status: "unsupported",
+        message: "Đây là link profile; hãy dán vào ô Quét kênh để lấy toàn bộ video."
+      };
+    }
     const route = ROUTES.find((item) => item.hosts.some((host) => hostname === host || hostname.endsWith(`.${host}`)));
     if (route) return { ...route, message: "Chờ xử lý qua SO9" };
 
@@ -343,6 +404,15 @@ function detectRoute(link) {
       };
     }
 
+    if (url.protocol !== "https:") {
+      return {
+        platform: "media-page",
+        strategy: "unsupported",
+        status: "unsupported",
+        message: "Chỉ quét trang media HTTPS để bảo vệ quyền truy cập."
+      };
+    }
+
     return {
       platform: "media-page",
       strategy: "direct-media",
@@ -352,6 +422,33 @@ function detectRoute(link) {
   } catch (_) {
     return null;
   }
+}
+
+function detectStoryRoute(url, hostname) {
+  const path = url.pathname.toLowerCase();
+  const isInstagramStory = (hostname === "instagram.com" || hostname.endsWith(".instagram.com")) &&
+    /^\/stories(?:\/|$)/.test(path);
+  const isFacebookStory = (hostname === "facebook.com" || hostname.endsWith(".facebook.com")) &&
+    (/^\/stories(?:\/|$)/.test(path) || (path === "/story.php" && url.searchParams.has("story_fbid")));
+
+  if (!isInstagramStory && !isFacebookStory) return null;
+  return {
+    platform: isInstagramStory ? "instagram-story" : "facebook-story",
+    strategy: "direct-media",
+    permissionOrigin: isInstagramStory ? getPermissionOrigin(url) : "",
+    message: "Quét story để tìm URL video trực tiếp công khai"
+  };
+}
+
+function detectInstagramMediaRoute(url, hostname) {
+  if (!(hostname === "instagram.com" || hostname.endsWith(".instagram.com"))) return null;
+  if (!/^\/(?:[a-z0-9._]+\/)?(?:p|reel|tv)\/[^/?#]+\/?$/i.test(url.pathname)) return null;
+  return {
+    platform: "instagram-media",
+    strategy: "direct-media",
+    permissionOrigin: getPermissionOrigin(url),
+    message: "Quét trang Instagram để tìm URL video trực tiếp công khai"
+  };
 }
 
 function isRestrictedGenericHost(hostname) {
@@ -411,7 +508,10 @@ function normalizeFacebookChannelUrl(value) {
 
   try {
     const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
-    if (!url.hostname.toLowerCase().endsWith("facebook.com")) return "";
+    const hostname = url.hostname.toLowerCase();
+    if (!(hostname === "facebook.com" || hostname.endsWith(".facebook.com"))) return "";
+    url.protocol = "https:";
+    url.hostname = "www.facebook.com";
     if (!url.pathname.includes("/reels")) {
       url.pathname = `${url.pathname.replace(/\/$/, "")}/reels/`;
     }
@@ -429,11 +529,61 @@ function normalizeTikTokChannelUrl(value) {
 
   try {
     const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
-    if (!url.hostname.toLowerCase().endsWith("tiktok.com")) return "";
+    const hostname = url.hostname.toLowerCase();
+    if (!(hostname === "tiktok.com" || hostname.endsWith(".tiktok.com"))) return "";
+    url.protocol = "https:";
     const match = decodeURIComponent(url.pathname).match(/\/(@[^/?#]+)/);
     if (!match) return "";
     url.hostname = "www.tiktok.com";
     url.pathname = `/${match[1]}`;
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch (_) {
+    return "";
+  }
+}
+
+function normalizeInstagramChannelUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const hostname = url.hostname.toLowerCase();
+    if (!(hostname === "instagram.com" || hostname.endsWith(".instagram.com"))) return "";
+
+    const parts = url.pathname.split("/").filter(Boolean);
+    const reserved = new Set(["accounts", "direct", "explore", "p", "reel", "reels", "stories", "tv"]);
+    const username = decodeURIComponent(parts[0] || "");
+    if (parts.length !== 1 || reserved.has(username.toLowerCase()) || !/^[a-z0-9._]+$/i.test(username)) return "";
+
+    url.protocol = "https:";
+    url.hostname = "www.instagram.com";
+    url.pathname = `/${username}/`;
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch (_) {
+    return "";
+  }
+}
+
+function normalizeDouyinChannelUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const hostname = url.hostname.toLowerCase();
+    if (!(hostname === "douyin.com" || hostname.endsWith(".douyin.com"))) return "";
+
+    const match = decodeURIComponent(url.pathname).match(/^\/user\/([^/?#]+)/i);
+    if (!match) return "";
+
+    url.protocol = "https:";
+    url.hostname = "www.douyin.com";
+    url.pathname = `/user/${encodeURIComponent(match[1])}`;
     url.search = "";
     url.hash = "";
     return url.toString();
@@ -449,11 +599,34 @@ function normalizeChannelUrl(value) {
   const tiktokUrl = normalizeTikTokChannelUrl(value);
   if (tiktokUrl) return { url: tiktokUrl, platform: "tiktok", label: "TikTok" };
 
+  const instagramUrl = normalizeInstagramChannelUrl(value);
+  if (instagramUrl) {
+    return {
+      url: instagramUrl,
+      platform: "instagram",
+      label: "Instagram",
+      permissionOrigin: getPermissionOrigin(new URL(instagramUrl))
+    };
+  }
+
+  const douyinUrl = normalizeDouyinChannelUrl(value);
+  if (douyinUrl) {
+    return {
+      url: douyinUrl,
+      platform: "douyin",
+      label: "Douyin",
+      permissionOrigin: getPermissionOrigin(new URL(douyinUrl))
+    };
+  }
+
   return { url: "", platform: "", label: "" };
 }
 
 function normalizeMaxReels(value) {
-  return Math.max(1, Math.min(500, Number.parseInt(value, 10) || 50));
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : NaN;
 }
 
 function normalizeMinViews(value) {
@@ -475,11 +648,17 @@ async function saveFolder() {
 }
 
 function normalizeFolder(value) {
-  return value
+  const segments = String(value || "")
     .trim()
     .replace(/^[\\/]+|[\\/]+$/g, "")
     .replace(/[<>:"|?*]/g, "-")
-    .replace(/[\\/]+/g, "/") || "SO9-Downloads";
+    .replace(/[\\/]+/g, "/")
+    .split("/")
+    .map((segment) => segment.trim().replace(/[. ]+$/g, ""))
+    .filter((segment) => segment && segment !== "." && segment !== "..")
+    .map((segment) => /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(segment) ? `_${segment}` : segment)
+    .join("/");
+  return segments || "SO9-Downloads";
 }
 
 async function startRun() {
@@ -487,6 +666,8 @@ async function startRun() {
 }
 
 async function startQueuedDownload(message) {
+  if (state.running || state.crawling) return;
+  state.queue = migrateQueueEntries(state.queue);
   if (!state.queue.some((item) => item.status === "pending" || item.status === "failed")) {
     addLog("Không có link hợp lệ để tải.", "warn");
     await persist();
@@ -507,13 +688,38 @@ async function startQueuedDownload(message) {
   await chrome.storage.local.set({ downloadFolder: folder });
   addLog(message, "info");
   await persist();
-  await chrome.runtime.sendMessage({ type: "START_RUN", folder });
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "START_RUN", folder });
+    if (!response?.ok) throw new Error(response?.error || "Không thể bắt đầu tiến trình tải.");
+    state.running = true;
+    state.paused = false;
+    scheduleRender();
+  } catch (error) {
+    addLog(error.message || String(error), "error");
+    await persist();
+    render();
+  }
+}
+
+function migrateQueueEntries(queue) {
+  return (queue || []).map((item) => {
+    const route = detectRoute(item.link);
+    if (!route || route.status === "unsupported" || route.strategy === "channel") return item;
+    if (item.strategy !== "so9" || route.strategy !== "direct-media") return item;
+    return {
+      ...item,
+      platform: route.platform,
+      strategy: route.strategy,
+      permissionOrigin: route.permissionOrigin || "",
+      message: route.message
+    };
+  });
 }
 
 async function ensureDirectMediaPermissions() {
   const origins = [...new Set(state.queue
     .filter((item) => (item.status === "pending" || item.status === "failed") && needsHostPermission(item))
-    .map((item) => item.permissionOrigin)
+    .map((item) => item.permissionOrigin || derivePermissionOrigin(item))
     .filter(Boolean))];
 
   if (!origins.length) return true;
@@ -524,20 +730,55 @@ async function ensureDirectMediaPermissions() {
   });
 }
 
+async function ensureChannelPermission(channel) {
+  if (!channel.permissionOrigin || channel.platform === "facebook" || channel.platform === "tiktok") return true;
+  if (!chrome.permissions?.request) return false;
+
+  return await new Promise((resolve) => {
+    chrome.permissions.request({ origins: [channel.permissionOrigin] }, (granted) => resolve(Boolean(granted)));
+  });
+}
+
 function needsHostPermission(item) {
   return item.strategy === "direct-media" || item.strategy === "telegram-private";
 }
 
+function derivePermissionOrigin(item) {
+  if (item.strategy === "telegram-private") return TELEGRAM_WEB_ORIGIN;
+  if (item.strategy !== "direct-media") return "";
+
+  try {
+    const url = new URL(item.link);
+    if (url.protocol !== "https:") return "";
+    return getPermissionOrigin(url);
+  } catch (_) {
+    return "";
+  }
+}
+
 async function togglePause() {
-  await chrome.runtime.sendMessage({ type: state.paused ? "RESUME_RUN" : "PAUSE_RUN" });
+  try {
+    const response = await chrome.runtime.sendMessage({ type: state.paused ? "RESUME_RUN" : "PAUSE_RUN" });
+    if (!response?.ok) throw new Error(response?.error || "Không thể thay đổi trạng thái tiến trình.");
+  } catch (error) {
+    addLog(error.message || String(error), "error");
+    render();
+  }
 }
 
 async function stopRun() {
-  await chrome.runtime.sendMessage({ type: "STOP_RUN" });
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "STOP_RUN" });
+    if (!response?.ok) throw new Error(response?.error || "Không thể dừng tiến trình.");
+  } catch (error) {
+    addLog(error.message || String(error), "error");
+    render();
+  }
 }
 
 async function clearQueue() {
-  if (state.running) return;
+  if (state.running || state.crawling) return;
+  if (state.queue.length && !confirm("Bạn có chắc chắn muốn xóa toàn bộ danh sách tải và log không?")) return;
   state.queue = [];
   state.logs = [];
   await persist();
@@ -554,7 +795,7 @@ function exportLogs() {
     url,
     filename: `${normalizeFolder(els.folder.value)}/so9-log-${Date.now()}.txt`,
     saveAs: false
-  });
+  }).catch(() => {}).finally(() => URL.revokeObjectURL(url));
 }
 
 function addLog(message, level = "info") {
@@ -563,6 +804,7 @@ function addLog(message, level = "info") {
 }
 
 async function persist() {
+  const lastCrawlMax = normalizeMaxReels(els.maxReels.value);
   await chrome.storage.local.set({
     queue: state.queue,
     logs: state.logs,
@@ -570,9 +812,19 @@ async function persist() {
     savedReelItems: state.savedReelItems,
     lastCrawlSource: state.lastCrawlSource,
     lastCrawlTime: state.lastCrawlTime,
-    lastCrawlMax: normalizeMaxReels(els.maxReels.value),
-    lastMinViews: normalizeMinViews(els.minViews.value),
-    runState: { running: state.running, paused: state.paused }
+    ...(Number.isNaN(lastCrawlMax) || els.maxReels.validity.badInput ? {} : { lastCrawlMax }),
+    lastMinViews: normalizeMinViews(els.minViews.value)
+  });
+}
+
+let renderScheduled = false;
+
+function scheduleRender() {
+  if (renderScheduled) return;
+  renderScheduled = true;
+  requestAnimationFrame(() => {
+    renderScheduled = false;
+    render();
   });
 }
 
@@ -584,15 +836,25 @@ function render() {
   els.success.textContent = String(success);
   els.failed.textContent = String(failed);
 
-  els.start.disabled = state.running || state.queue.length === 0;
-  els.loadSaved.disabled = state.running || state.savedReelLinks.length === 0;
+  els.start.disabled = state.running || state.crawling || state.queue.length === 0;
+  els.loadSaved.disabled = state.running || state.crawling || state.savedReelLinks.length === 0;
   els.pause.disabled = !state.running;
   els.pause.textContent = state.paused ? "Tiếp tục" : "Tạm dừng";
-  els.stop.disabled = !state.running;
-  els.clear.disabled = state.running;
+  els.stop.disabled = !state.running && !state.crawling;
+  els.clear.disabled = state.running || state.crawling;
+  els.clearData.disabled = state.running || state.crawling;
+  els.crawl.disabled = state.running || state.crawling;
+  els.file.disabled = state.running || state.crawling;
+  els.importText.disabled = state.running || state.crawling;
+  els.manualLinks.disabled = state.running || state.crawling;
+  els.folder.disabled = state.running || state.crawling;
+  els.channelUrl.disabled = state.running || state.crawling;
+  els.maxReels.disabled = state.running || state.crawling;
+  els.minViews.disabled = state.running || state.crawling;
 
-  els.badge.className = `status-badge ${state.running ? (state.paused ? "paused" : "running") : "idle"}`;
-  els.badge.textContent = state.running ? (state.paused ? "Tạm dừng" : "Đang chạy") : "Sẵn sàng";
+  const badgeState = state.crawling ? "crawling" : state.running ? (state.paused ? "paused" : "running") : "idle";
+  els.badge.className = `status-badge ${badgeState}`;
+  els.badge.textContent = state.crawling ? "Đang quét" : state.running ? (state.paused ? "Tạm dừng" : "Đang chạy") : "Sẵn sàng";
   els.savedCount.textContent = `Đã lưu ${state.savedReelLinks.length} link`;
   els.lastCrawl.textContent = state.lastCrawlTime
     ? `Lần quét gần nhất: ${new Date(state.lastCrawlTime).toLocaleString()}`

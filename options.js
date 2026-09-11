@@ -11,15 +11,19 @@ chrome.storage.local.get(["timeoutSeconds", "downloadFolder", "theme"], (data) =
 });
 
 saveBtn.addEventListener("click", async () => {
-  const timeoutSeconds = Math.max(20, Math.min(300, Number(timeoutInput.value) || 90));
-  const downloadFolder = normalizeFolder(folderInput.value || "SO9-Downloads");
-  timeoutInput.value = timeoutSeconds;
-  folderInput.value = downloadFolder;
-  await chrome.storage.local.set({ timeoutSeconds, downloadFolder });
-  saveStatus.textContent = "Đã lưu cài đặt.";
-  setTimeout(() => {
-    saveStatus.textContent = "";
-  }, 1800);
+  try {
+    const timeoutSeconds = Math.max(20, Math.min(300, Number(timeoutInput.value) || 90));
+    const downloadFolder = normalizeFolder(folderInput.value || "SO9-Downloads");
+    timeoutInput.value = timeoutSeconds;
+    folderInput.value = downloadFolder;
+    await chrome.storage.local.set({ timeoutSeconds, downloadFolder });
+    saveStatus.textContent = "Đã lưu cài đặt.";
+    setTimeout(() => {
+      saveStatus.textContent = "";
+    }, 1800);
+  } catch (error) {
+    saveStatus.textContent = `Không thể lưu: ${error.message || error}`;
+  }
 });
 
 themeToggle.addEventListener("click", async () => {
@@ -28,9 +32,15 @@ themeToggle.addEventListener("click", async () => {
 });
 
 function normalizeFolder(value) {
-  return value
+  const folder = String(value || "")
     .trim()
     .replace(/^[\\/]+|[\\/]+$/g, "")
     .replace(/[<>:"|?*]/g, "-")
-    .replace(/[\\/]+/g, "/") || "SO9-Downloads";
+    .replace(/[\\/]+/g, "/")
+    .split("/")
+    .map((segment) => segment.trim().replace(/[. ]+$/g, ""))
+    .filter((segment) => segment && segment !== "." && segment !== "..")
+    .map((segment) => /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(segment) ? `_${segment}` : segment)
+    .join("/");
+  return folder || "SO9-Downloads";
 }

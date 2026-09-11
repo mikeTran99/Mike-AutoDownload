@@ -3,8 +3,7 @@ let lastDownloadElement = null;
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
     PREPARE_DOWNLOAD: () => prepareDownload(message.link),
-    CLICK_FINAL_DOWNLOAD: () => clickFinalDownload(),
-    FILL_AND_DOWNLOAD: () => legacyFillAndDownload(message.link)
+    CLICK_FINAL_DOWNLOAD: () => clickFinalDownload()
   };
 
   const handler = handlers[message.type];
@@ -48,29 +47,32 @@ async function clickFinalDownload() {
   return serializeCandidate(candidate);
 }
 
-async function legacyFillAndDownload(link) {
-  const result = await prepareDownload(link);
-  if (result.canFallbackClick) {
-    await clickFinalDownload();
-  }
-  return result;
-}
-
 function findInput() {
   const so9Input = document.querySelector(".download-input-field input[type='text'], .download-input-field textarea");
   if (so9Input && isVisible(so9Input) && !so9Input.disabled) return so9Input;
 
-  const inputs = [...document.querySelectorAll("input, textarea")];
-  return inputs.find((input) => {
-    const type = (input.getAttribute("type") || "").toLowerCase();
-    const placeholder = normalizeText(input.getAttribute("placeholder") || "");
-    return type !== "hidden" && !input.disabled && (
-      placeholder.includes("link") ||
-      placeholder.includes("url") ||
-      input.tagName.toLowerCase() === "textarea" ||
-      input.offsetParent !== null
-    );
-  }) || null;
+  return [...document.querySelectorAll("input, textarea")]
+    .filter((input) => {
+      const type = (input.getAttribute("type") || "").toLowerCase();
+      return type !== "hidden" && !input.disabled && isVisible(input);
+    })
+    .map((input) => {
+      const text = normalizeText([
+        input.getAttribute("placeholder"),
+        input.getAttribute("aria-label"),
+        input.getAttribute("name"),
+        input.getAttribute("id"),
+        input.closest("label")?.innerText
+      ].filter(Boolean).join(" "));
+      let score = 0;
+      if (/\b(link|url)\b/.test(text)) score += 100;
+      if (/video|download|tai xuong/.test(text)) score += 50;
+      if (input.tagName.toLowerCase() === "textarea") score += 10;
+      if (/search|tim kiem|email|password/.test(text)) score -= 200;
+      return { input, score };
+    })
+    .filter((candidate) => candidate.score >= 50)
+    .sort((a, b) => b.score - a.score)[0]?.input || null;
 }
 
 function findDownloadButton(input) {
@@ -223,7 +225,7 @@ function isDirectMediaUrl(href) {
     const url = new URL(href, location.href);
     const pathname = url.pathname.toLowerCase();
     const hostname = url.hostname.toLowerCase();
-    return /\.(mp4|mov|webm|m4v|mkv|jpg|jpeg|png|webp)(\?|$)/i.test(pathname) ||
+    return /\.(mp4|mov|webm|m4v|mkv)(\?|$)/i.test(pathname) ||
       (hostname.includes("cdn") && /\/(video|videos|media|downloader|download)\//i.test(pathname));
   } catch (_) {
     return false;
@@ -279,7 +281,6 @@ function clickLikeHuman(element) {
   element.dispatchEvent(new MouseEvent("mousemove", eventOptions));
   element.dispatchEvent(new MouseEvent("mousedown", eventOptions));
   element.dispatchEvent(new MouseEvent("mouseup", eventOptions));
-  element.dispatchEvent(new MouseEvent("click", eventOptions));
   element.click?.();
 }
 

@@ -1,21 +1,24 @@
 # Mike-AutomationAI
 
-Mike-AutomationAI là Chrome Extension Manifest V3 giúp tải hàng loạt video từ Facebook, TikTok, Instagram, Douyin qua SO9 Downloader, quét kênh Facebook/TikTok và tải các video trực tiếp hợp lệ mà người dùng có quyền truy cập.
+Mike-AutomationAI là Chrome Extension Manifest V3 giúp tải hàng loạt video từ Facebook, TikTok, Instagram, Douyin qua SO9 Downloader, quét profile/kênh công khai đa nền tảng và tải các video trực tiếp hợp lệ mà người dùng có quyền truy cập.
 
 ## Tài liệu sử dụng
 
 - Hướng dẫn chi tiết: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - Bản PDF: [output/pdf/Mike-AutomationAI-Huong-dan-su-dung.pdf](output/pdf/Mike-AutomationAI-Huong-dan-su-dung.pdf)
+- Chính sách quyền riêng tư: [PRIVACY.md](PRIVACY.md)
 
 ## Tính năng chính
 
 - Đọc link từ file `.txt`, `.csv` hoặc ô dán link thủ công.
+- Ô Số lượng quét kênh không còn chặn 500: nhập số nguyên dương hoặc để trống để lấy toàn bộ link trang tải được. Instagram hỗ trợ cả `/p/mã/` và `/tên_tài_khoản/p/mã/`.
 - Tự phân loại Facebook, TikTok, Instagram, Douyin và mở đúng trang SO9 Downloader.
-- Quét Facebook Reels và TikTok profile, lọc theo số view tối thiểu, lưu danh sách đã quét và đưa vào queue tải.
+- Quét Facebook Reels, TikTok profile, Instagram profile và Douyin profile, lọc theo số view tối thiểu, hỗ trợ để trống số lượng để lấy toàn bộ video tìm thấy, lưu danh sách đã quét và đưa vào queue tải.
 - Hỗ trợ Telegram Web cho video mà Chrome user hiện tại đã đăng nhập và có quyền xem.
 - Tải trực tiếp link video công khai `.mp4`, `.m4v`, `.mov`, `.webm`.
 - Quét trang media đã được cấp quyền để tìm URL video trực tiếp công khai.
 - Quản lý queue, tạm dừng/tiếp tục/dừng, xuất log và lưu file vào thư mục con trong Downloads.
+- Lưu trạng thái job bền vững và phục hồi an toàn khi service worker của MV3 được Chrome tạm dừng.
 
 ## Cài đặt nhanh
 
@@ -26,9 +29,13 @@ Mike-AutomationAI là Chrome Extension Manifest V3 giúp tải hàng loạt vide
 5. Chọn thư mục chứa file `manifest.json`.
 6. Ghim icon `Mike-AutomationAI` trên thanh công cụ Chrome.
 
-Chrome không cho extension ghi vào một folder tùy ý ngoài Downloads. Hãy nhập thư mục con, ví dụ `SO9-Downloads`; file sẽ nằm trong `Downloads/SO9-Downloads`.
+Extension yêu cầu Chrome 114 trở lên vì sử dụng Side Panel API. Sau khi sửa `manifest.json`, hãy reload unpacked extension trong `chrome://extensions`.
+
+Chrome không cho extension ghi vào một folder tùy ý ngoài Downloads. Hãy nhập thư mục con, ví dụ `SO9-Downloads`; file sẽ nằm trong `Downloads/SO9-Downloads`. Trang media quét trực tiếp chỉ hỗ trợ HTTPS; link file video HTTP do người dùng nhập trực tiếp vẫn được phân loại riêng và có thể bị máy chủ từ chối.
 
 ## Giới hạn an toàn
+
+Không cam kết tương thích mọi website hoặc mọi trình duyệt. Bản này nhắm Chrome desktop 114+; trình duyệt Chromium khác cần kiểm tra hỗ trợ Side Panel và API extension. Không hỗ trợ Firefox/Safari/mobile trong bản build này. Nguồn ký hạn, phụ thuộc header, tách riêng audio/video hoặc chống tải có thể không tải được; tiện ích không ghép track hay giả lập quyền truy cập.
 
 Extension chỉ hỗ trợ nội dung công khai, direct video URL, hoặc nội dung mà tài khoản Chrome hiện tại được phép xem. Dự án không bypass DRM, paywall, login, blob stream, HLS/DASH segment stitching, hạn chế Telegram, quyền riêng tư, hoặc nội dung bạn không có quyền tải.
 

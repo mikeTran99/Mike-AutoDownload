@@ -12,11 +12,11 @@
         <div>
           <p class="eyebrow">Video Batch Downloader</p>
           <h1>Mike-AutomationAI</h1>
-          <small>Download Facebook, Tiktok, Instagram, Douyin, Telegram Web và video trực tiếp</small>
+          <small>Download Facebook, TikTok, Instagram, Douyin, Telegram Web và video trực tiếp</small>
         </div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
-          <button id="themeToggle" class="ghost" aria-label="Đổi giao diện" style="width: 32px; height: 32px; padding: 0; font-size: 16px; border-radius: 8px;">🌓</button>
-          <span id="runBadge" class="status-badge idle">Sẵn sàng</span>
+        <div class="hero-tools">
+          <button id="themeToggle" class="ghost icon-button" type="button" aria-label="Đổi giao diện" title="Đổi giao diện">🌓</button>
+          <span id="runBadge" class="status-badge idle" role="status" aria-live="polite">Sẵn sàng</span>
         </div>
       </section>
 
@@ -28,12 +28,13 @@
 
         <div class="crawler-grid">
           <div class="field-row channel-field">
-            <label for="channelUrl">Link kênh Facebook / TikTok</label>
-            <input id="channelUrl" type="text" placeholder="Ví dụ: https://www.tiktok.com/@username">
+            <label for="channelUrl">Link kênh Facebook / TikTok / Instagram / Douyin</label>
+            <input id="channelUrl" type="text" placeholder="Ví dụ: https://www.tiktok.com/@username hoặc https://www.instagram.com/username/">
           </div>
           <div class="field-row count-field">
             <label for="maxReels">Số lượng</label>
-            <input id="maxReels" type="number" min="1" max="500" step="1" value="50">
+            <input id="maxReels" type="number" min="1" step="1" inputmode="numeric" placeholder="Toàn bộ" aria-describedby="maxReelsHelp">
+            <small id="maxReelsHelp">Số nguyên dương, hoặc để trống để lấy toàn bộ.</small>
           </div>
           <div class="field-row min-view-field">
             <label for="minViews">View tối thiểu</label>
@@ -45,9 +46,9 @@
           <button id="crawlBtn" class="primary" type="button">Quét link video</button>
           <button id="loadSavedBtn" type="button">Tải link đã quét</button>
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-          <small id="lastCrawlInfo">Chưa quét kênh nào.</small>
-          <button id="clearDataBtn" class="ghost" type="button" style="font-size: 12px; padding: 4px 8px; color: var(--danger-color, #ff4d4f);">Xóa dữ liệu cũ</button>
+        <div class="crawler-summary">
+          <small id="lastCrawlInfo" role="status" aria-live="polite">Chưa quét kênh nào.</small>
+          <button id="clearDataBtn" class="ghost danger-action" type="button">Xóa dữ liệu cũ</button>
         </div>
       </section>
 
@@ -114,7 +115,7 @@
           <h2>Log trạng thái</h2>
           <button id="exportLogBtn" class="ghost" type="button">Xuất log</button>
         </div>
-        <div id="logList" class="log-list"></div>
+        <div id="logList" class="log-list" role="log" aria-live="polite"></div>
       </section>
     </main>
     <script src="popup.js"></script>
