@@ -18,7 +18,32 @@ langToggle.addEventListener("click", async () => {
   langToggle.textContent = getLang() === "vi" ? "EN" : "VI";
 });
 
-chrome.storage.local.get(["timeoutSeconds", "downloadFolder", "theme"], (data) => {
+const folderPerChannel = document.getElementById("folderPerChannel");
+const notifyEnabled = document.getElementById("notifyEnabled");
+const checkBackendsBtn = document.getElementById("checkBackendsBtn");
+const backendStatus = document.getElementById("backendStatus");
+
+checkBackendsBtn.addEventListener("click", async () => {
+  checkBackendsBtn.disabled = true;
+  backendStatus.textContent = t("Đang kiểm tra...");
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "CHECK_BACKENDS" });
+    backendStatus.innerHTML = (response?.results || []).map((result) => `
+      <div class="${result.ok ? "ok" : "fail"}">
+        <span>${result.ok ? "✔" : "✖"}</span>
+        <strong>${new URL(result.site).hostname}</strong>
+        <small>${result.ok ? `${result.status} · ${result.ms} ms` : (result.error || `HTTP ${result.status}`)}</small>
+      </div>`).join("") || t("Không có nguồn nào để kiểm tra.");
+  } catch (error) {
+    backendStatus.textContent = t(`Không thể lưu: ${error.message || error}`);
+  } finally {
+    checkBackendsBtn.disabled = false;
+  }
+});
+
+chrome.storage.local.get(["timeoutSeconds", "downloadFolder", "theme", "folderPerChannel", "notifyEnabled"], (data) => {
+  folderPerChannel.checked = Boolean(data.folderPerChannel);
+  notifyEnabled.checked = data.notifyEnabled !== false;
   timeoutInput.value = data.timeoutSeconds || 90;
   folderInput.value = data.downloadFolder || "SO9-Downloads";
   if (data.theme === "light") document.documentElement.classList.add("light-theme");
@@ -30,7 +55,7 @@ saveBtn.addEventListener("click", async () => {
     const downloadFolder = normalizeFolder(folderInput.value || "SO9-Downloads");
     timeoutInput.value = timeoutSeconds;
     folderInput.value = downloadFolder;
-    await chrome.storage.local.set({ timeoutSeconds, downloadFolder });
+    await chrome.storage.local.set({ timeoutSeconds, downloadFolder, folderPerChannel: folderPerChannel.checked, notifyEnabled: notifyEnabled.checked });
     saveStatus.textContent = t("Đã lưu cài đặt.");
     setTimeout(() => {
       saveStatus.textContent = "";

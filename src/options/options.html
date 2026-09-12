@@ -28,8 +28,18 @@
           <label for="downloadFolder">Thư mục con trong Downloads</label>
           <input id="downloadFolder" type="text">
         </div>
+        <label class="check-row" for="folderPerChannel"><input id="folderPerChannel" type="checkbox"> Tách thư mục con theo kênh (Downloads/SO9-Downloads/&lt;tên kênh&gt;)</label>
+        <label class="check-row" for="notifyEnabled"><input id="notifyEnabled" type="checkbox"> Thông báo Chrome khi xong danh sách</label>
         <button id="saveBtn" class="primary" type="button">Lưu cài đặt</button>
         <p id="saveStatus" class="save-status" role="status" aria-live="polite" aria-atomic="true"></p>
+      </section>
+      <section class="panel">
+        <div class="section-title">
+          <h2>Nguồn tải</h2>
+          <button id="checkBackendsBtn" class="ghost" type="button">Kiểm tra nguồn tải</button>
+        </div>
+        <p class="save-status">Thứ tự dùng: trang gốc → SO9 → site dự phòng. Kiểm tra để biết site nào đang sống.</p>
+        <div id="backendStatus" class="backend-status"></div>
       </section>
     </main>
     <script type="module" src="options.js"></script>

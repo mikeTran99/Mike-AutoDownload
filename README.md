@@ -2,6 +2,16 @@
 
 # Mike-Autodownload
 
+<p align="center">
+  <a href="https://github.com/mikeTran99/Mike-AutoDownload/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/mikeTran99/Mike-AutoDownload?label=release&color=1e40af"></a>
+  <a href="https://github.com/mikeTran99/Mike-AutoDownload/actions/workflows/checks.yml"><img alt="Checks" src="https://github.com/mikeTran99/Mike-AutoDownload/actions/workflows/checks.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/license-MIT-c9a227"></a>
+  <img alt="Chrome MV3" src="https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white">
+</p>
+
+**Tiếng Việt** · [English](#english)
+
+
 Mike-Autodownload là Chrome Extension Manifest V3 giúp tải hàng loạt video từ Facebook, TikTok, Instagram, Douyin qua SO9 Downloader, quét profile/kênh công khai đa nền tảng và tải các video trực tiếp hợp lệ mà người dùng có quyền truy cập.
 
 ## Tài liệu sử dụng
@@ -16,7 +26,7 @@ Mike-Autodownload là Chrome Extension Manifest V3 giúp tải hàng loạt vide
 - Đọc link từ file `.txt`, `.csv` hoặc ô dán link thủ công.
 - Ô Số lượng quét kênh không còn chặn 500: nhập số nguyên dương hoặc để trống để lấy toàn bộ link trang tải được. Instagram hỗ trợ cả `/p/mã/` và `/tên_tài_khoản/p/mã/`.
 - Tự phân loại Facebook, TikTok, Instagram, Douyin và tải theo chuỗi dự phòng: đọc URL video ngay trên trang gốc (phiên Chrome đang đăng nhập) → SO9 Downloader → site dự phòng (snaptik.app, ssstik.io, snapsave.app, snapinsta.app, snapdouyin.app). Nguồn nào lỗi tự chuyển nguồn kế tiếp.
-- Quét Facebook Reels, TikTok profile, Instagram profile và Douyin profile, lọc theo số view tối thiểu, hỗ trợ để trống số lượng để lấy toàn bộ video tìm thấy, lưu danh sách đã quét và đưa vào queue tải.
+- Quét Facebook Reels, TikTok profile, Instagram Reels, Douyin profile và kênh YouTube (Videos/Shorts, kèm ngày đăng, subscriber), lọc theo số view tối thiểu, hỗ trợ để trống số lượng để lấy toàn bộ video tìm thấy, lưu danh sách đã quét và đưa vào queue tải.
 - YouTube: đọc bản progressive 360p/720p có tiếng từ trang gốc, dự phòng savefrom.net (giới hạn của trình duyệt: không ghép luồng 1080p). Bilibili: qua snapany.com.
 - **Dashboard nghiên cứu kênh** (cho reup & phân tích đối thủ): follower, view trung bình/trung vị, tỉ lệ video viral (≥3× trung vị), nhịp đăng video/tuần, thứ & giờ đăng hiệu quả, hashtag dùng nhiều, top 10 video kèm caption/thumbnail/ngày đăng/view mỗi ngày, đánh dấu video MỚI từ lần quét trước và ĐÃ TẢI; sparkline tăng trưởng; bảng so sánh nhiều kênh; nút "Tải top 10 chưa tải", "Quét lại tất cả"; chế độ **Chỉ thống kê** không đưa vào hàng đợi; xuất CSV đầy đủ.
 - Lịch sử tải: link đã tải thành công được nhớ, nạp lại sẽ tự đánh dấu "Đã tải trước" để không reup trùng.
@@ -24,13 +34,14 @@ Mike-Autodownload là Chrome Extension Manifest V3 giúp tải hàng loạt vide
 - Hỗ trợ Telegram Web cho video mà Chrome user hiện tại đã đăng nhập và có quyền xem.
 - Tải trực tiếp link video công khai `.mp4`, `.m4v`, `.mov`, `.webm`.
 - Quét trang media đã được cấp quyền để tìm URL video trực tiếp công khai.
+- Tiến độ tải từng file (%, dung lượng, tốc độ), số link còn lại hiện trên icon Chrome, tuỳ chọn tách thư mục theo kênh, xuất CSV hàng đợi, lọc log theo mức.
 - Quản lý hàng đợi cho lô lớn: nạp thêm nhiều đợt không trùng, lọc theo trạng thái, bỏ từng link, dọn link đã xong, chỉ vẽ 150 mục mỗi lần; tạm dừng/tiếp tục/dừng, xuất log, lưu file vào thư mục con trong Downloads.
 - Nút Liên hệ (✉) mở Facebook, Gmail và mã QR Telegram của tác giả.
 - Lưu trạng thái job bền vững và phục hồi an toàn khi service worker của MV3 được Chrome tạm dừng.
 
 ## Cài đặt nhanh
 
-1. Tải hoặc clone repo này về máy.
+1. Tải bản mới nhất tại [Releases](https://github.com/mikeTran99/Mike-AutoDownload/releases/latest) (file zip) hoặc clone repo này.
 2. Mở Chrome và vào `chrome://extensions`.
 3. Bật `Developer mode`.
 4. Bấm `Load unpacked`.
@@ -72,3 +83,19 @@ npm run check
 ```
 
 Nếu sửa `src/manifest.json`, icon, hoặc `src/background/service-worker.js`, hãy reload lại unpacked extension trong `chrome://extensions`.
+
+---
+
+## English
+
+**Mike-Autodownload** is a Chrome (Manifest V3) side-panel extension for batch-downloading videos from Facebook, TikTok, Instagram, Douyin, YouTube (360p progressive), Bilibili and Telegram Web, plus a channel research dashboard for re-uploaders and competitor analysis.
+
+- **Download chain per platform**: native page JSON → SO9 → fallback sites (snaptik, ssstik, snapsave, snapinsta, snapdouyin, savefrom, snapany). Fails over automatically.
+- **Channel crawler**: Facebook Reels, TikTok, Instagram Reels, Douyin, YouTube — with view filter, unlimited mode, per-item progress and a persistent job that survives service-worker restarts.
+- **Research dashboard**: followers/subscribers, median & average views, viral outliers (≥3× median), posts per week, best weekday/hour, top hashtags, top 10 with NEW/DONE badges, growth sparklines, multi-channel comparison, stats-only mode, CSV export.
+- **Queue for large batches**: append + dedupe, status filters, prune, per-item remove, download history so nothing is re-uploaded twice, optional per-channel subfolders.
+- **Bilingual UI** (Vietnamese/English toggle), dark/light theme.
+
+Install: download the zip from [Releases](https://github.com/mikeTran99/Mike-AutoDownload/releases/latest), unzip, open `chrome://extensions` → Developer mode → **Load unpacked** → pick the unzipped folder (or `src/` when cloning). Requires Chrome 114+.
+
+Limits: no DRM/paywall/login bypass, no HLS/DASH stitching (YouTube is capped at the 360p progressive stream), only content the signed-in user may access. Not intended for the Chrome Web Store because of YouTube downloading. License: MIT.

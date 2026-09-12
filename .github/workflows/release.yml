@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run checks
+        run: npm run check
+
+      - name: Verify tag matches manifest version
+        run: |
+          MANIFEST=$(node -p "require('./src/manifest.json').version")
+          TAG="${GITHUB_REF_NAME#v}"
+          test "$MANIFEST" = "$TAG" || { echo "manifest $MANIFEST != tag $TAG"; exit 1; }
+
+      - name: Package extension
+        run: |
+          cd src && zip -r "../Mike-Autodownload-${GITHUB_REF_NAME}.zip" . -x "assets/telegram-qr.*" && cd ..
+          ls -la Mike-Autodownload-*.zip
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Mike-Autodownload ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            ## Cài đặt / Install
+            1. Tải file `Mike-Autodownload-${{ github.ref_name }}.zip` bên dưới và giải nén.
+            2. Mở `chrome://extensions`, bật **Developer mode**.
+            3. Bấm **Load unpacked** và chọn thư mục vừa giải nén (chứa `manifest.json`).
+            4. Ghim icon Mike-Autodownload và mở Side Panel.
+
+            Hướng dẫn đầy đủ: `docs/USER_GUIDE.md` · PDF đính kèm.
+          files: |
+            Mike-Autodownload-${{ github.ref_name }}.zip
+            docs/pdf/Mike-Autodownload-Huong-dan-su-dung.pdf

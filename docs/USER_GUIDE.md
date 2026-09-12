@@ -298,13 +298,20 @@ Sau mỗi lần **Quét link video**, mỗi kênh có một thẻ trong **Thốn
 
 Lịch sử tải: mọi link tải thành công được nhớ; nạp lại file có link cũ sẽ tự đánh dấu **Đã tải trước** và bị bỏ qua khi chạy (dùng ✕ hoặc Xóa để tải lại).
 
-## 24. Hàng đợi lớn
+## 24. YouTube, tiến độ tải và tuỳ chọn mới
+
+- Dán `youtube.com/@kênh` (hoặc `/videos`, `/shorts`) vào ô Quét kênh: extension cuộn tab Videos/Shorts, lấy tiêu đề, view, ngày đăng ("2 days ago") và số subscriber cho dashboard. Tải video YouTube vẫn giới hạn 360p.
+- Mỗi file đang tải hiện thanh tiến độ (%, dung lượng, tốc độ); icon Chrome hiện số link còn lại.
+- Trang Cài đặt: **Tách thư mục con theo kênh** (mỗi kênh một thư mục trong Downloads/SO9-Downloads), bật/tắt thông báo, **Kiểm tra nguồn tải** để biết SO9/site dự phòng nào đang sống.
+- Log có bộ lọc Thông tin / Cảnh báo / Lỗi; hàng đợi có **Xuất CSV**; nhấn Enter trong ô link kênh để quét; nút ⧉ mở giao diện trong tab riêng.
+
+## 25. Hàng đợi lớn
 
 - Nạp file/dán link nhiều lần: link mới được **thêm vào** hàng đợi, link trùng (kể cả đã tải xong) bị bỏ qua — log ghi rõ số thêm/số trùng.
 - Bộ lọc **Tất cả / Chờ tải / Đang tải / Thành công / Thất bại** kèm số lượng; nút ✕ trên mỗi link để bỏ; **Dọn link xong** xoá link đã tải và link không hỗ trợ để hàng đợi gọn.
 - Với hàng đợi vài nghìn link, bảng chỉ hiện 150 mục mỗi lần, bấm **Xem thêm** để tải tiếp.
 - Instagram: dán link profile (`instagram.com/ten/`) — extension tự chuyển sang tab **Reels** để quét vì tab profile chỉ hiện lưới bài viết.
 
-## 25. Kiểm thử mã nguồn
+## 26. Kiểm thử mã nguồn
 
 Chạy `npm run check` (Node 22+) để kiểm tra cú pháp và hợp đồng MV3 (manifest, quyền, thông điệp runtime).

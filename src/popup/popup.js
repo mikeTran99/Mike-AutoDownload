@@ -1,5 +1,5 @@
 import { t, initLang, setLang, getLang, applyDom } from "../shared/i18n.js";
-import { formatCompact, sparklineSvg, VIRAL_MULTIPLIER } from "../shared/analytics.js";
+import { formatCompact, sparklineSvg, VIRAL_MULTIPLIER, channelFolderName, formatBytes } from "../shared/analytics.js";
 
 const ROUTES = [
   { platform: "facebook", strategy: "so9", hosts: ["facebook.com", "fb.watch"], url: "https://so9.vn/9downloader/facebook" },
@@ -32,6 +32,7 @@ const state = {
   channelStats: {},
   downloadHistory: {},
   queueFilter: "all",
+  logFilter: "all",
   queueLimit: 150,
   lastCrawlSource: "",
   lastCrawlTime: 0,
@@ -65,6 +66,9 @@ const els = {
   badge: document.getElementById("runBadge"),
   themeToggle: document.getElementById("themeToggle"),
   langToggle: document.getElementById("langToggle"),
+  openTab: document.getElementById("openTabBtn"),
+  logFilters: document.getElementById("logFilters"),
+  exportQueue: document.getElementById("exportQueueBtn"),
   statsList: document.getElementById("statsList"),
   prune: document.getElementById("pruneBtn"),
   queueFilters: document.getElementById("queueFilters"),
@@ -132,6 +136,7 @@ function init() {
       Object.assign(state, message.state);
       scheduleRender();
     }
+    if (message.type === "DOWNLOAD_PROGRESS") renderProgress(message);
   });
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -164,6 +169,20 @@ function init() {
   els.exportLog.addEventListener("click", exportLogs);
   els.themeToggle.addEventListener("click", toggleTheme);
   els.langToggle.addEventListener("click", toggleLang);
+  els.openTab.addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("popup/popup.html") }));
+  els.channelUrl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      crawlChannelVideos();
+    }
+  });
+  els.logFilters.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-level]");
+    if (!button) return;
+    state.logFilter = button.dataset.level;
+    render();
+  });
+  els.exportQueue.addEventListener("click", exportQueueCsv);
   els.exportStats.addEventListener("click", exportStatsCsv);
   els.prune.addEventListener("click", pruneQueue);
   els.statsOnly.addEventListener("change", () => chrome.storage.local.set({ lastStatsOnly: els.statsOnly.checked }));
@@ -354,6 +373,7 @@ function buildQueueFromReelItems(items) {
       link: item.link,
       views: item.views || 0,
       viewText: item.viewText || "",
+      subfolder: item.subfolder || "",
       status: "pending",
       platform: item.platform || route?.platform || "facebook",
       strategy: item.strategy || route?.strategy || "so9",
@@ -378,7 +398,7 @@ async function crawlChannelVideos() {
   }
 
   if (!channel.url) {
-    addLog("Vui lòng nhập link kênh Facebook, TikTok, Instagram hoặc Douyin hợp lệ.", "warn");
+    addLog("Vui lòng nhập link kênh Facebook, TikTok, Instagram, Douyin hoặc YouTube hợp lệ.", "warn");
     await persist();
     render();
     return;
@@ -698,6 +718,33 @@ function normalizeInstagramChannelUrl(value) {
   }
 }
 
+function normalizeYouTubeChannelUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const hostname = url.hostname.toLowerCase();
+    if (!(hostname === "youtube.com" || hostname.endsWith(".youtube.com"))) return "";
+    const parts = url.pathname.split("/").filter(Boolean);
+    const head = decodeURIComponent(parts[0] || "");
+    let base = "";
+    if (head.startsWith("@")) base = `/${head}`;
+    else if (["channel", "c", "user"].includes(head) && parts[1]) base = `/${head}/${parts[1]}`;
+    if (!base) return "";
+    const tab = /^(shorts|videos|streams)$/i.test(parts[base.split("/").length - 1] || "") ? parts[base.split("/").length - 1].toLowerCase() : "videos";
+
+    url.protocol = "https:";
+    url.hostname = "www.youtube.com";
+    url.pathname = `${base}/${tab}`;
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch (_) {
+    return "";
+  }
+}
+
 function normalizeDouyinChannelUrl(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -745,6 +792,16 @@ function normalizeChannelUrl(value) {
       platform: "douyin",
       label: "Douyin",
       permissionOrigin: getPermissionOrigin(new URL(douyinUrl))
+    };
+  }
+
+  const youtubeUrl = normalizeYouTubeChannelUrl(value);
+  if (youtubeUrl) {
+    return {
+      url: youtubeUrl,
+      platform: "youtube",
+      label: "YouTube",
+      permissionOrigin: getPermissionOrigin(new URL(youtubeUrl))
     };
   }
 
@@ -1104,7 +1161,7 @@ async function queueTopFromChannel(sourceUrl) {
   const picks = (channel.metrics?.top || channel.top || [])
     .filter((video) => video.views > 0 && !state.downloadHistory[video.link])
     .slice(0, 10)
-    .map((video) => ({ ...video, platform: channel.platform }));
+    .map((video) => ({ ...video, platform: channel.platform, subfolder: channelFolderName(channel.name, channel.sourceUrl) }));
   if (!picks.length) {
     addLog("Không còn video top nào chưa tải.", "warn");
     await persist();
@@ -1219,7 +1276,7 @@ function renderQueue() {
   els.queueMore.textContent = `${t("Xem thêm")} (${visible.length - shown.length})`;
   els.queue.className = "queue-list";
   els.queue.innerHTML = shown.map((item) => `
-    <article class="queue-item">
+    <article class="queue-item" data-id="${escapeHtml(item.id)}">
       ${state.running ? "" : `<button class="ghost remove" type="button" data-id="${escapeHtml(item.id)}" title="${escapeHtml(t("Bỏ link này"))}">✕</button>`}
       <strong title="${escapeHtml(item.link)}">${escapeHtml(item.link)}</strong>
       <div class="queue-meta">
@@ -1228,8 +1285,29 @@ function renderQueue() {
         <span class="${statusClass(item.status)}">${statusLabel(item.status)}</span>
       </div>
       <small>${escapeHtml(t(item.message || ""))}</small>
+      ${item.status === "running" ? `<div class="progress"><b></b><em></em></div>` : ""}
     </article>
   `).join("");
+}
+
+function renderProgress({ itemId, bytesReceived, totalBytes, speed }) {
+  const bar = els.queue.querySelector(`.queue-item[data-id="${CSS.escape(String(itemId))}"] .progress`);
+  if (!bar) return;
+  const percent = totalBytes > 0 ? Math.min(100, Math.round(bytesReceived / totalBytes * 100)) : 0;
+  bar.querySelector("b").style.width = `${totalBytes > 0 ? percent : 30}%`;
+  bar.querySelector("em").textContent = `${totalBytes > 0 ? `${percent}% · ` : ""}${formatBytes(bytesReceived)}${totalBytes > 0 ? ` / ${formatBytes(totalBytes)}` : ""} · ${formatBytes(speed)}/s`;
+}
+
+function exportQueueCsv() {
+  const rows = [["link", "platform", "status", "views", "message"]];
+  for (const item of state.queue) rows.push([item.link, item.platform, item.status, item.views || "", item.message || ""]);
+  const csv = "\ufeff" + rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `mike-autodownload-queue-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function renderViewBadge(item) {
@@ -1239,7 +1317,15 @@ function renderViewBadge(item) {
 }
 
 function renderLogs() {
-  els.logs.innerHTML = state.logs.map((log) => `
+  const counts = { all: state.logs.length, info: 0, warn: 0, error: 0 };
+  for (const log of state.logs) if (log.level in counts) counts[log.level] += 1;
+  for (const button of els.logFilters.querySelectorAll("button[data-level]")) {
+    const key = button.dataset.level;
+    button.classList.toggle("active", key === state.logFilter);
+    button.textContent = `${t(button.dataset.label || (button.dataset.label = button.textContent.trim()))} ${counts[key]}`;
+  }
+  const visible = state.logFilter === "all" ? state.logs : state.logs.filter((log) => log.level === state.logFilter);
+  els.logs.innerHTML = visible.map((log) => `
     <article class="log-item">
       <strong class="${log.level === "error" ? "fail" : log.level === "warn" ? "warn" : ""}">${escapeHtml(t(log.message))}</strong>
       <div class="log-meta">

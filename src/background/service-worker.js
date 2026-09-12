@@ -1,5 +1,5 @@
 import { t } from "../shared/i18n.js";
-import { computeChannelMetrics, postedAtFromLink } from "../shared/analytics.js";
+import { computeChannelMetrics, postedAtFromLink, parseRelativeAge, channelFolderName } from "../shared/analytics.js";
 
 
 const JOB_STATE_KEY = "jobState";
@@ -89,6 +89,20 @@ async function handleMessage(message, sender = {}) {
       crawlCancelRequested = false;
       await publishState();
     }
+  }
+
+  if (message.type === "CHECK_BACKENDS") {
+    const sites = [...new Set(Object.values(BACKENDS).flat().filter((backend) => backend !== "native"))];
+    const results = await Promise.all(sites.map(async (site) => {
+      const startedAt = Date.now();
+      try {
+        const response = await fetch(site, { method: "GET", cache: "no-store", redirect: "follow" });
+        return { site, ok: response.ok, status: response.status, ms: Date.now() - startedAt };
+      } catch (error) {
+        return { site, ok: false, status: 0, ms: Date.now() - startedAt, error: error.message || String(error) };
+      }
+    }));
+    return { ok: true, results };
   }
 
   if (message.type === "PAUSE_RUN") {
@@ -342,8 +356,10 @@ async function crawlChannelVideos(channelUrl, maxCount, folder, minViews, option
     result = await crawlInstagramProfile(channelUrl, maxCount, folder, minViews, options);
   } else if (platform === "douyin") {
     result = await crawlDouyinProfile(channelUrl, maxCount, folder, minViews, options);
+  } else if (platform === "youtube") {
+    result = await crawlYouTubeChannel(channelUrl, maxCount, folder, minViews, options);
   } else {
-    throw new Error("Chỉ hỗ trợ quét kênh Facebook, TikTok, Instagram hoặc Douyin.");
+    throw new Error("Chỉ hỗ trợ quét kênh Facebook, TikTok, Instagram, Douyin hoặc YouTube.");
   }
   if (result?.ok) await recordChannelStats(channelUrl, platform, result);
   return result;
@@ -392,6 +408,9 @@ function readProfileHeaderInPage() {
   } else if (host.endsWith("instagram.com")) {
     name = text(meta("og:title")).replace(/\s*[(•].*$/, "");
     followersText = (meta("og:description").match(/([\d.,]+\s*[KMB]?)\s*(?:Followers|người theo dõi)/i) || [])[1] || "";
+  } else if (host.endsWith("youtube.com")) {
+    name = text(document.querySelector("yt-page-header-renderer h1, #channel-name, h1")?.textContent) || text(meta("og:title"));
+    followersText = (body.match(/([\d.,]+\s*(?:Tr|N|K|M|B)?)\s*(?:subscribers|người đăng ký)/i) || [])[1] || "";
   } else if (host.endsWith("douyin.com")) {
     name = text(document.querySelector("h1")?.textContent);
     followersText = (body.match(/粉丝\s*([\d.,]+\s*[万亿]?)/) || [])[1] || "";
@@ -439,7 +458,7 @@ async function recordChannelStats(sourceUrl, platform, result) {
     viewText: item.viewText || "",
     caption: String(item.caption || "").slice(0, 120),
     thumbnail: item.thumbnail || "",
-    postedAt: postedAtFromLink(item.link, platform)
+    postedAt: postedAtFromLink(item.link, platform) || Number(item.postedAt) || 0
   }));
   const metrics = computeChannelMetrics(items, {
     previousLinks: new Set((previous.items || []).map((item) => item.link)),
@@ -536,6 +555,7 @@ async function crawlFacebookReels(channelUrl, maxCount, folder, minViews, option
     const queue = items.map((item, index) => ({
       id: `crawl-${lastCrawlTime}-${index}`,
       link: item.link,
+      subfolder: channelFolderName(profile.name, sourceUrl),
       views: item.views || 0,
       viewText: item.viewText || "",
       status: "pending",
@@ -628,6 +648,7 @@ async function crawlTikTokProfile(channelUrl, maxCount, folder, minViews, option
     const queue = items.map((item, index) => ({
       id: `crawl-${lastCrawlTime}-${index}`,
       link: item.link,
+      subfolder: channelFolderName(profile.name, sourceUrl),
       views: item.views || 0,
       viewText: item.viewText || "",
       status: "pending",
@@ -718,6 +739,129 @@ async function crawlDouyinProfile(channelUrl, maxCount, folder, minViews, option
   });
 }
 
+async function crawlYouTubeChannel(channelUrl, maxCount, folder, minViews, options = {}) {
+  const statsOnly = Boolean(options.statsOnly);
+  const sourceUrl = normalizeYouTubeChannelUrl(channelUrl);
+  if (!sourceUrl) {
+    throw new Error("Link kênh YouTube không hợp lệ.");
+  }
+
+  const result = await crawlPublicProfile({
+    statsOnly,
+    sourceUrl,
+    maxCount,
+    folder,
+    minViews,
+    platform: "youtube",
+    label: "YouTube",
+    itemLabel: "video YouTube",
+    downloaderUrl: "https://en1.savefrom.net/",
+    pageFunction: crawlYouTubeVideosInPage,
+    waitAfterLoadMs: 3000,
+    blockedMessage: "YouTube không hiển thị danh sách video (kênh riêng tư hoặc bị chặn)."
+  });
+  // Ngày đăng của YouTube chỉ có dạng "2 days ago" trong lưới → đổi sang mốc tuyệt đối cho dashboard.
+  if (Array.isArray(result?.items)) {
+    result.items = result.items.map((item) => ({ ...item, postedAt: parseRelativeAge(item.ageText, result.lastCrawlTime) }));
+  }
+  return result;
+}
+
+function crawlYouTubeVideosInPage(limit, minViews) {
+  const unlimited = limit === null || limit === undefined || String(limit).trim() === "";
+  const maxCount = unlimited ? Number.MAX_SAFE_INTEGER : Number(limit);
+  if (!Number.isSafeInteger(maxCount) || maxCount < 1) throw new Error("Số lượng phải là số nguyên dương hoặc để trống.");
+  const minimumViews = Math.max(0, Number(minViews) || 0);
+  const items = new Map();
+  let skipped = 0;
+  let skippedByView = 0;
+  let missingView = 0;
+  let staleScrolls = 0;
+  let lastSize = 0;
+
+  function normalizeVideoUrl(href) {
+    try {
+      const url = new URL(href, location.origin);
+      if (!url.hostname.endsWith("youtube.com")) return "";
+      const watchId = url.pathname === "/watch" ? url.searchParams.get("v") : "";
+      const shortId = url.pathname.match(/^\/shorts\/([A-Za-z0-9_-]{6,})/)?.[1];
+      if (watchId) return `https://www.youtube.com/watch?v=${watchId}`;
+      if (shortId) return `https://www.youtube.com/shorts/${shortId}`;
+      return "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function parseViews(text) {
+    const normalized = String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
+    const match = normalized.match(/(\d+(?:[.,]\d+)?)\s*(k|m|b|n|tr|nghin|trieu|ty)?(?![a-z])\s*(?:views?|luot xem)/);
+    if (!match) return null;
+    const value = Number.parseFloat(match[1].replace(",", "."));
+    const suffix = match[2] || "";
+    const multiplier = ["k", "n", "nghin"].includes(suffix) ? 1000 : ["m", "tr", "trieu"].includes(suffix) ? 1000000 : ["b", "ty"].includes(suffix) ? 1000000000 : 1;
+    const views = Math.round(value * multiplier);
+    return { views, viewText: suffix ? `${match[1]}${suffix.toUpperCase()}` : String(views) };
+  }
+
+  const collect = () => {
+    for (const anchor of document.querySelectorAll('a[href*="/watch?v="], a[href^="/shorts/"], a[href*="youtube.com/shorts/"]')) {
+      const normalized = normalizeVideoUrl(anchor.href);
+      if (!normalized) continue;
+      if (items.has(normalized)) continue;
+      const card = anchor.closest("ytd-rich-item-renderer, ytd-grid-video-renderer, ytd-video-renderer, yt-lockup-view-model, ytd-reel-item-renderer") || anchor.parentElement;
+      const cardText = card?.innerText || anchor.innerText || "";
+      const title = (anchor.getAttribute("title") || card?.querySelector("#video-title, [id*='video-title'], h3")?.textContent || anchor.innerText || "").replace(/\s+/g, " ").trim();
+      const viewInfo = parseViews(cardText);
+      if (!viewInfo && minimumViews > 0) {
+        missingView += 1;
+        continue;
+      }
+      const views = viewInfo?.views || 0;
+      if (minimumViews > 0 && views < minimumViews) {
+        skippedByView += 1;
+        continue;
+      }
+      const ageText = (cardText.match(/\d+\s*(?:second|minute|hour|day|week|month|year)s?\s*ago|\d+\s*(?:giây|phút|giờ|ngày|tuần|tháng|năm)\s*trước/i) || [])[0] || "";
+      items.set(normalized, {
+        link: normalized,
+        views,
+        viewText: viewInfo?.viewText || "",
+        caption: title.slice(0, 160),
+        thumbnail: card?.querySelector("img")?.src || "",
+        ageText,
+        platform: "youtube",
+        downloaderUrl: "https://en1.savefrom.net/"
+      });
+      if (!unlimited && items.size >= maxCount) break;
+    }
+  };
+
+  return new Promise((resolve) => {
+    const finish = () => resolve({
+      items: unlimited ? Array.from(items.values()) : Array.from(items.values()).slice(0, maxCount),
+      skipped,
+      skippedByView,
+      missingView
+    });
+    const tick = () => {
+      collect();
+      if ((!unlimited && items.size >= maxCount) || staleScrolls >= 6) {
+        finish();
+        return;
+      }
+      if (items.size === lastSize) staleScrolls += 1;
+      else {
+        staleScrolls = 0;
+        lastSize = items.size;
+      }
+      window.scrollBy({ top: Math.max(900, window.innerHeight * 1.5), behavior: "smooth" });
+      setTimeout(tick, 1800);
+    };
+    tick();
+  });
+}
+
 async function crawlPublicProfile({
   statsOnly = false,
   sourceUrl,
@@ -772,6 +916,7 @@ async function crawlPublicProfile({
     const queue = items.map((item, index) => ({
       id: `crawl-${lastCrawlTime}-${index}`,
       link: item.link,
+      subfolder: channelFolderName(profile.name, sourceUrl),
       views: item.views || 0,
       viewText: item.viewText || "",
       status: "pending",
@@ -1415,6 +1560,33 @@ function normalizeInstagramChannelUrl(value) {
   }
 }
 
+function normalizeYouTubeChannelUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const hostname = url.hostname.toLowerCase();
+    if (!(hostname === "youtube.com" || hostname.endsWith(".youtube.com"))) return "";
+    const parts = url.pathname.split("/").filter(Boolean);
+    const head = decodeURIComponent(parts[0] || "");
+    let base = "";
+    if (head.startsWith("@")) base = `/${head}`;
+    else if (["channel", "c", "user"].includes(head) && parts[1]) base = `/${head}/${parts[1]}`;
+    if (!base) return "";
+    const tab = /^(shorts|videos|streams)$/i.test(parts[base.split("/").length - 1] || "") ? parts[base.split("/").length - 1].toLowerCase() : "videos";
+
+    url.protocol = "https:";
+    url.hostname = "www.youtube.com";
+    url.pathname = `${base}/${tab}`;
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch (_) {
+    return "";
+  }
+}
+
 function normalizeDouyinChannelUrl(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -1443,6 +1615,7 @@ function detectCrawlPlatform(value) {
   if (normalizeTikTokChannelUrl(value)) return "tiktok";
   if (normalizeInstagramChannelUrl(value)) return "instagram";
   if (normalizeDouyinChannelUrl(value)) return "douyin";
+  if (normalizeYouTubeChannelUrl(value)) return "youtube";
   return "";
 }
 
@@ -1470,9 +1643,10 @@ async function runQueue(folder, runId) {
     : "Bắt đầu xử lý danh sách link.", "info");
   await publishState();
 
-  const settings = await chrome.storage.local.get(["timeoutSeconds", "downloadFolder"]);
+  const settings = await chrome.storage.local.get(["timeoutSeconds", "downloadFolder", "folderPerChannel"]);
   const timeoutMs = Math.max(20000, Math.min(300000, Number(settings.timeoutSeconds || 90) * 1000));
   const downloadFolder = sanitizeFolder(folder || settings.downloadFolder || "SO9-Downloads");
+  const folderPerChannel = Boolean(settings.folderPerChannel);
   const itemIds = [...currentJob.itemIds];
 
   while (currentJob.nextIndex < itemIds.length && currentJob.runId === runId) {
@@ -1512,7 +1686,8 @@ async function runQueue(folder, runId) {
     await appendLog(`Đang xử lý ${item.platform}: ${item.link}`, "info");
 
     try {
-      const result = await processItemWithRetry(item, downloadFolder, deadlineAt, runId);
+      const itemFolder = folderPerChannel && item.subfolder ? sanitizeFolder(`${downloadFolder}/${item.subfolder}`) : downloadFolder;
+      const result = await processItemWithRetry(item, itemFolder, deadlineAt, runId);
       await updateItem(item.id, {
         status: "success",
         message: result.filename ? `Đã tải: ${result.filename}` : "Đã hoàn tất"
@@ -2626,10 +2801,33 @@ function waitForDownloadId(downloadId, timeoutMs, runId) {
         .finally(() => reject(new Error("DOWNLOAD_TIMEOUT: Hết thời gian chờ file tải về.")));
     }, timeoutMs);
 
+    let lastBytes = 0;
+    let lastTick = Date.now();
+    const progressTimer = setInterval(async () => {
+      try {
+        const [item] = await searchDownloads({ id: downloadId });
+        if (!item || item.state !== "in_progress") return;
+        const now = Date.now();
+        const speed = Math.max(0, (item.bytesReceived - lastBytes) / Math.max(0.2, (now - lastTick) / 1000));
+        lastBytes = item.bytesReceived;
+        lastTick = now;
+        chrome.runtime.sendMessage({
+          type: "DOWNLOAD_PROGRESS",
+          itemId: currentJob.activeItemId,
+          bytesReceived: item.bytesReceived,
+          totalBytes: item.totalBytes,
+          speed
+        }).catch(() => {});
+      } catch (_) {
+        // progress is best-effort
+      }
+    }, 1000);
+
     function cleanup() {
       if (settled) return false;
       settled = true;
       clearTimeout(timer);
+      clearInterval(progressTimer);
       chrome.downloads.onChanged.removeListener(onChanged);
       return true;
     }
@@ -2971,6 +3169,9 @@ async function publishState() {
     paused
   };
   chrome.runtime.sendMessage({ type: "STATE_UPDATED", state }).catch(() => {});
+  const remaining = state.queue.filter((item) => item.status === "pending" || item.status === "failed" || item.status === "running").length;
+  chrome.action.setBadgeText({ text: runLock && remaining ? String(remaining) : "" }).catch(() => {});
+  chrome.action.setBadgeBackgroundColor({ color: "#1e40af" }).catch(() => {});
 }
 
 async function abortActiveWork() {
@@ -3059,7 +3260,7 @@ function formatDownloadError(error) {
 }
 
 function notify(title, message) {
-  chrome.storage.local.get(["lang"]).then((data) => chrome.notifications.create({
+  chrome.storage.local.get(["lang", "notifyEnabled"]).then((data) => data.notifyEnabled === false ? null : chrome.notifications.create({
     type: "basic",
     iconUrl: chrome.runtime.getURL("icons/mike-128.png"),
     title,

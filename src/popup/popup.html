@@ -16,6 +16,7 @@
         </div>
         <div class="hero-tools">
           <div class="hero-buttons">
+            <button id="openTabBtn" class="ghost icon-button" type="button" aria-label="Mở trong tab" title="Mở trong tab">⧉</button>
             <button id="contactBtn" class="ghost icon-button" type="button" aria-label="Liên hệ" title="Liên hệ">✉</button>
             <button id="langToggle" class="ghost icon-button" type="button" aria-label="Đổi ngôn ngữ" title="Đổi ngôn ngữ">EN</button>
             <button id="themeToggle" class="ghost icon-button" type="button" aria-label="Đổi giao diện" title="Đổi giao diện">🌓</button>
@@ -32,8 +33,8 @@
 
         <div class="crawler-grid">
           <div class="field-row channel-field">
-            <label for="channelUrl">Link kênh Facebook / TikTok / Instagram / Douyin</label>
-            <input id="channelUrl" type="text" placeholder="Ví dụ: https://www.tiktok.com/@username hoặc https://www.instagram.com/username/">
+            <label for="channelUrl">Link kênh Facebook / TikTok / Instagram / Douyin / YouTube</label>
+            <input id="channelUrl" type="text" placeholder="Ví dụ: https://www.tiktok.com/@username, instagram.com/username/, youtube.com/@channel">
           </div>
           <div class="field-row count-field">
             <label for="maxReels">Số lượng</label>
@@ -124,6 +125,7 @@
         <div class="section-title">
           <h2>Danh sách link</h2>
           <div class="hero-buttons">
+            <button id="exportQueueBtn" class="ghost" type="button" title="Xuất danh sách link kèm trạng thái">Xuất CSV</button>
             <button id="pruneBtn" class="ghost" type="button" title="Bỏ link đã tải xong và link không hỗ trợ">Dọn link xong</button>
             <button id="clearBtn" class="ghost" type="button">Xóa</button>
           </div>
@@ -143,6 +145,12 @@
         <div class="section-title">
           <h2>Log trạng thái</h2>
           <button id="exportLogBtn" class="ghost" type="button">Xuất log</button>
+        </div>
+        <div id="logFilters" class="queue-filters" role="tablist">
+          <button type="button" data-level="all" class="active">Tất cả</button>
+          <button type="button" data-level="info">Thông tin</button>
+          <button type="button" data-level="warn">Cảnh báo</button>
+          <button type="button" data-level="error">Lỗi</button>
         </div>
         <div id="logList" class="log-list" role="log" aria-live="polite"></div>
       </section>

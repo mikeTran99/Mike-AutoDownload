@@ -1,6 +1,6 @@
 {
   "name": "mike-autodownload",
-  "version": "1.8.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Static contract checks for the Mike-Autodownload Chrome extension.",
   "scripts": {

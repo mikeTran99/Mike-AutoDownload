@@ -72,9 +72,10 @@ G-Labs là **app desktop Electron + yt-dlp đóng gói, mã nguồn đóng** (re
 
 ### Phase 2 — Chuẩn open-source (~1 ngày)
 
-- [ ] `LICENSE` (MIT), `CHANGELOG.md` (Keep a Changelog), `CONTRIBUTING.md` ngắn, `SECURITY.md` (nêu rõ giới hạn: không bypass DRM/login).
-- [ ] `.github/workflows/ci.yml`: `node --check` 4 file + parse manifest + ESLint (`eslint:recommended`, env webextensions). Nhẹ, không cần `npm install` nặng.
-- [ ] `.github/workflows/release.yml`: tag `v*` → zip đúng file runtime (loại `docs/`, `tools/`, `.github/`, `AGENTS.md`) → GitHub Release. Chuẩn release (G-Labs chỉ có asset, body trống — ta làm đủ):
+- [x] `LICENSE` (MIT). (2026-09-12) — CHANGELOG = `docs/PROJECT_HISTORY.md`; CONTRIBUTING/SECURITY thêm khi có người đóng góp.
+- [x] `.github/workflows/checks.yml` (npm run check). (2026-09-11)
+- [ ] ~~`.github/workflows/ci.yml`:~~ `node --check` 4 file + parse manifest + ESLint (`eslint:recommended`, env webextensions). Nhẹ, không cần `npm install` nặng.
+- [x] `.github/workflows/release.yml`: tag `v*` (2026-09-12) → zip đúng file runtime (loại `docs/`, `tools/`, `.github/`, `AGENTS.md`) → GitHub Release. Chuẩn release (G-Labs chỉ có asset, body trống — ta làm đủ):
   - Asset: `Mike-Autodownload-v2.0.0.zip` (~100 KB, không `.crx` vì Chrome chặn cài ngoài CWS) + `Huong-dan-su-dung.pdf`.
   - Body sinh từ mục tương ứng trong `CHANGELOG.md` + 5 bước "Load unpacked" + ảnh side panel.
   - Tên release: `Mike-Autodownload v2.0.0` (không dùng kiểu "Download Here").
@@ -82,19 +83,19 @@ G-Labs là **app desktop Electron + yt-dlp đóng gói, mã nguồn đóng** (re
 - [ ] `package.json` tối thiểu chỉ để chạy ESLint + script `zip`. Không bundler.
 - [ ] **B7**: Xóa `output/pdf/` khỏi git (đính vào Release asset), xóa `icon-128.svg`. Thêm `output/` vào `.gitignore`.
 - [ ] **B6**: Viết lại `AGENTS.md` → `CLAUDE.md`/`AGENTS.md` không chứa đường dẫn cá nhân; chuyển `PROJECT_HISTORY.md` vào `CHANGELOG.md`.
-- [ ] README song ngữ: VI chính + mục "English" ngắn; ảnh screenshot side panel; badge CI/version/license.
-- [ ] Bump `2.0.0`.
+- [x] README song ngữ + badge. (2026-09-12) — [ ] ảnh screenshot side panel (bạn chụp từ Chrome thật).
+- [x] Bump `2.0.0`. (2026-09-12)
 
 ### Phase 3 — "Mạnh mẽ" (học từ G-Labs, ~3 ngày) → v2.1.0
 
 Thứ tự theo giá trị/công sức:
 
-- [ ] **Xem trước kênh + tick chọn**: `CRAWL_CHANNEL_VIDEOS` trả `items` → panel "Kết quả quét" (checkbox, view, link rút gọn, chọn tất cả / lọc view) → "Thêm vào danh sách". Bỏ hành vi tự đổ vào queue.
-- [ ] **Lịch sử + chống trùng**: `downloadHistory[link] = {filename, time, platform}` ghi khi success; khi nạp queue đánh dấu `status: "skipped"` kèm nút "Tải lại"; tab Lịch sử có xoá.
+- [~] **Xem trước kênh** = dashboard top 10 + "Tải top 10 chưa tải" (2026-09-11); tick chọn từng video: chưa. `CRAWL_CHANNEL_VIDEOS` trả `items` → panel "Kết quả quét" (checkbox, view, link rút gọn, chọn tất cả / lọc view) → "Thêm vào danh sách". Bỏ hành vi tự đổ vào queue.
+- [x] **Lịch sử + chống trùng** (2026-09-11): `downloadHistory[link] = {filename, time, platform}` ghi khi success; khi nạp queue đánh dấu `status: "skipped"` kèm nút "Tải lại"; tab Lịch sử có xoá.
 - [ ] **Queue song song**: Options `concurrency` 1–3; `runQueue` dùng pool N worker, mỗi worker giữ tab riêng (`activeTabIds: Set`). Stop huỷ tất cả.
-- [ ] **Tiến độ từng mục**: trong `waitForDownloadId` poll `chrome.downloads.search` 1s/lần → `updateItem({progress, bytes, speed})`; popup vẽ thanh %.
-- [ ] **Lọc trạng thái + chọn hàng + chạy mục chọn**; **Xuất CSV** queue.
-- [ ] **Nút "Kiểm tra SO9"**: mở 4 trang SO9 nền, chạy `detectPageError` + tìm ô nhập → báo trang nào hỏng. Thay cho "engine tự cập nhật".
+- [x] **Tiến độ từng mục** (2026-09-12): trong `waitForDownloadId` poll `chrome.downloads.search` 1s/lần → `updateItem({progress, bytes, speed})`; popup vẽ thanh %.
+- [x] Lọc trạng thái + Xuất CSV queue (2026-09-12); chọn hàng/chạy mục chọn: chưa.
+- [x] **Kiểm tra nguồn tải** trong Options (2026-09-12): mở 4 trang SO9 nền, chạy `detectPageError` + tìm ô nhập → báo trang nào hỏng. Thay cho "engine tự cập nhật".
 - [ ] `test/url.test.js` bằng `node --test` cho `shared/url.js`. Không framework.
 
 ### Phase 4 — Tùy chọn (chỉ khi có nhu cầu)

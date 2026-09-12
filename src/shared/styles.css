@@ -920,3 +920,13 @@ button:disabled {
 .badge.done { color: var(--gold-primary); border: 1px solid var(--gold-primary); }
 .stats-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .stats-actions button { min-height: 32px; padding: 6px 12px; font-size: 11px; }
+
+/* ---- Tiến độ tải & nguồn tải */
+.queue-item .progress { position: relative; height: 14px; margin-top: 6px; border-radius: 7px; background: var(--bg-main); overflow: hidden; box-shadow: inset 2px 2px 4px var(--shadow-dark); }
+.queue-item .progress b { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 7px; background: linear-gradient(90deg, var(--blue-dark, #1e40af), var(--blue-light, #3b82f6)); transition: width 0.4s; }
+.queue-item .progress em { position: absolute; inset: 0; font-style: normal; font-size: 9.5px; line-height: 14px; text-align: center; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,0.8); }
+.backend-status { display: grid; gap: 6px; margin-top: 10px; font-size: 12px; }
+.backend-status div { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: var(--border-radius-md); background: var(--bg-main); box-shadow: inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light); }
+.backend-status .ok span { color: var(--success); }
+.backend-status .fail span { color: var(--danger); }
+.backend-status small { opacity: 0.8; }

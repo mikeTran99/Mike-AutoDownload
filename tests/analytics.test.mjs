@@ -40,3 +40,15 @@ test("helpers", () => {
   assert.match(sparklineSvg([1, 2, 3]), /<svg class="sparkline up"/);
   assert.equal(sparklineSvg([1]), "");
 });
+
+test("relative ages, channel folder names and byte formatting", async () => {
+  const { parseRelativeAge, channelFolderName, formatBytes } = await import("../src/shared/analytics.js");
+  const now = Date.parse("2026-09-12T00:00:00Z");
+  assert.equal(parseRelativeAge("22K views • 18 hours ago", now), now - 18 * 3600000);
+  assert.equal(parseRelativeAge("3 tuần trước", now), now - 3 * 604800000);
+  assert.equal(parseRelativeAge("no date", now), 0);
+  assert.equal(channelFolderName('Mike: "Reup" <2026>'), "Mike Reup 2026");
+  assert.equal(channelFolderName("", "https://www.tiktok.com/@fahzyla/"), "@fahzyla");
+  assert.equal(channelFolderName("", "https://www.instagram.com/fahzyla/reels/"), "fahzyla");
+  assert.equal(formatBytes(1536000), "1.5 MB");
+});

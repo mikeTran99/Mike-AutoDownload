@@ -29,6 +29,13 @@
 - Applied a "Royal Blue & Gold" color scheme for buttons, icons, and headings.
 - Cleaned up the old packaged artifacts from `dist/`.
 
+## 2026-09-12 v2.0.0 — Whole-extension upgrade
+- YouTube channel crawler (Videos/Shorts tabs, views, "N ago" dates, subscribers) feeding the dashboard and the savefrom download route.
+- Per-file download progress (%, bytes, speed) streamed to the popup; toolbar badge shows remaining links.
+- Options: per-channel subfolders, notification toggle, "Kiểm tra nguồn tải" backend health check.
+- Popup: log level filters, queue CSV export, Enter-to-crawl, open-in-tab button.
+- Release pipeline: MIT LICENSE, tag-triggered GitHub Release with zip + PDF, bilingual README with badges.
+
 ## 2026-09-11 Project Layout
 - Runtime moved into `src/` (background/, content/, popup/, options/, shared/, icons/, assets/, _locales/); docs into `docs/` (incl. PDF and this history). Load unpacked now targets `src/`. Tests resolve logical file names through `tests/helpers/project.mjs`.
 

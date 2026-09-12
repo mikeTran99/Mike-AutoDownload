@@ -134,3 +134,38 @@ export function sparklineSvg(values, { width = 120, height = 28 } = {}) {
   const rising = points[points.length - 1] >= points[0];
   return `<svg class="sparkline ${rising ? "up" : "down"}" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${coords.join(" ")}"/></svg>`;
 }
+
+// "2 days ago" / "3 tuần trước" (YouTube) → mốc thời gian tuyệt đối; không nhận ra → 0.
+const AGE_UNITS = {
+  second: 1000, giay: 1000, minute: 60000, phut: 60000, hour: 3600000, gio: 3600000,
+  day: 86400000, ngay: 86400000, week: 604800000, tuan: 604800000,
+  month: 2592000000, thang: 2592000000, year: 31536000000, nam: 31536000000
+};
+
+export function parseRelativeAge(text, now = Date.now()) {
+  const normalized = String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
+  const match = normalized.match(/(\d+)\s*(second|minute|hour|day|week|month|year|giay|phut|gio|ngay|tuan|thang|nam)s?\b/);
+  if (!match) return 0;
+  return now - Number(match[1]) * AGE_UNITS[match[2]];
+}
+
+// Tên thư mục con theo kênh: bỏ ký tự cấm của Windows, tối đa 40 ký tự.
+export function channelFolderName(name, url = "") {
+  let base = String(name || "").trim();
+  if (!base || /^https?:/i.test(base)) {
+    try {
+      base = new URL(url).pathname.split("/").filter(Boolean).find((part) => !["reels", "videos", "shorts", "video"].includes(part)) || "";
+    } catch (_) {
+      base = "";
+    }
+  }
+  return base.replace(/[<>:"/\|?*\x00-\x1F]/g, "").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "").slice(0, 40);
+}
+
+export function formatBytes(bytes) {
+  const value = Number(bytes) || 0;
+  if (value >= 1e9) return `${(value / 1e9).toFixed(2)} GB`;
+  if (value >= 1e6) return `${(value / 1e6).toFixed(1)} MB`;
+  if (value >= 1e3) return `${(value / 1e3).toFixed(0)} KB`;
+  return `${value} B`;
+}
