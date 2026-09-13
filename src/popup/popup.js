@@ -374,13 +374,15 @@ function buildQueueFromReelItems(items) {
       views: item.views || 0,
       viewText: item.viewText || "",
       subfolder: item.subfolder || "",
-      status: "pending",
+      status: state.downloadHistory[item.link] ? "skipped" : "pending",
       platform: item.platform || route?.platform || "facebook",
       strategy: item.strategy || route?.strategy || "so9",
       downloaderUrl: item.downloaderUrl || route?.url || "https://so9.vn/9downloader/facebook",
       telegramWebUrl: route?.telegramWebUrl || "",
       permissionOrigin: route?.permissionOrigin || "",
-      message: item.viewText || item.views ? `View: ${item.viewText || formatNumber(item.views)}` : "Chờ xử lý"
+      message: state.downloadHistory[item.link]
+        ? "Đã tải trước đó, bỏ qua"
+        : item.viewText || item.views ? `View: ${item.viewText || formatNumber(item.views)}` : "Chờ xử lý"
     };
   });
 }
@@ -1187,11 +1189,16 @@ async function recrawlAllChannels() {
   const sources = sortedStats().map((channel) => channel.sourceUrl);
   if (!sources.length) return;
   if (!confirm(t("Quét lại {} kênh đã lưu? Mỗi kênh mở một tab và cuộn để cập nhật số liệu.").replace("{}", sources.length))) return;
+  const previousStatsOnly = els.statsOnly.checked;
   els.statsOnly.checked = true;
-  for (const source of sources) {
-    if (state.running) break;
-    els.channelUrl.value = source;
-    await crawlChannelVideos();
+  try {
+    for (const source of sources) {
+      if (state.running) break;
+      els.channelUrl.value = source;
+      await crawlChannelVideos();
+    }
+  } finally {
+    els.statsOnly.checked = previousStatsOnly;
   }
   addLog(`Đã quét lại ${sources.length} kênh.`, "info");
   await persist();
@@ -1213,6 +1220,13 @@ function shortLink(link) {
   }
 }
 
+// Chống CSV/formula injection: caption/tên kênh do trang đối thủ kiểm soát, Excel sẽ chạy ô bắt đầu bằng = + - @.
+function csvCell(value) {
+  let text = String(value ?? "");
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
 function exportStatsCsv() {
   const rows = [["channel", "platform", "name", "followers", "likes", "videos", "total_views", "avg_views", "median_views", "viral_count", "viral_rate_pct", "posts_per_week", "best_weekday", "best_hour", "new_since_last", "hashtags", "last_crawl",
     "top1", "top1_views", "top1_caption", "top2", "top2_views", "top2_caption", "top3", "top3_views", "top3_caption"]];
@@ -1227,7 +1241,7 @@ function exportStatsCsv() {
       top[0]?.link || "", top[0]?.views || "", top[0]?.caption || "", top[1]?.link || "", top[1]?.views || "", top[1]?.caption || "", top[2]?.link || "", top[2]?.views || "", top[2]?.caption || ""
     ]);
   }
-  const csv = "\ufeff" + rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
+  const csv = "\ufeff" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -1253,7 +1267,7 @@ function renderQueue() {
   for (const button of els.queueFilters.querySelectorAll("button[data-filter]")) {
     const key = button.dataset.filter;
     button.classList.toggle("active", key === state.queueFilter);
-    button.textContent = `${t(button.dataset.label || (button.dataset.label = button.textContent.trim()))} ${counts[key]}`;
+    button.textContent = `${t(button.dataset.label)} ${counts[key]}`;
   }
   els.prune.disabled = state.running || state.crawling || !state.queue.some((item) => ["success", "unsupported", "skipped"].includes(item.status));
 
@@ -1301,7 +1315,7 @@ function renderProgress({ itemId, bytesReceived, totalBytes, speed }) {
 function exportQueueCsv() {
   const rows = [["link", "platform", "status", "views", "message"]];
   for (const item of state.queue) rows.push([item.link, item.platform, item.status, item.views || "", item.message || ""]);
-  const csv = "\ufeff" + rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
+  const csv = "\ufeff" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -1322,7 +1336,7 @@ function renderLogs() {
   for (const button of els.logFilters.querySelectorAll("button[data-level]")) {
     const key = button.dataset.level;
     button.classList.toggle("active", key === state.logFilter);
-    button.textContent = `${t(button.dataset.label || (button.dataset.label = button.textContent.trim()))} ${counts[key]}`;
+    button.textContent = `${t(button.dataset.label)} ${counts[key]}`;
   }
   const visible = state.logFilter === "all" ? state.logs : state.logs.filter((log) => log.level === state.logFilter);
   els.logs.innerHTML = visible.map((log) => `

@@ -1852,15 +1852,19 @@ async function processPlatformItem(item, downloadFolder, deadlineAt, runId) {
   const chain = BACKENDS[item.platform] || [item.downloaderUrl];
   let lastError = null;
 
-  for (const backend of chain) {
+  for (const [index, backend] of chain.entries()) {
     assertRunActive(runId);
-    if (remainingMs(deadlineAt) < 5000) break;
+    const remaining = remainingMs(deadlineAt);
+    if (remaining < 5000) break;
+    // Chia đều thời gian còn lại cho các nguồn chưa thử (tối thiểu 25s) để một nguồn treo không nuốt hết hạn mức của link.
+    const backendsLeft = chain.length - index;
+    const backendDeadline = backendsLeft > 1 ? Date.now() + Math.max(25000, Math.floor(remaining / backendsLeft)) : deadlineAt;
     try {
       if (backend === "native") {
         await appendLog("Đang đọc URL video ngay trên trang gốc.", "info");
-        return await processDirectMediaPage(item, downloadFolder, deadlineAt, runId);
+        return await processDirectMediaPage(item, downloadFolder, Math.min(backendDeadline, deadlineAt), runId);
       }
-      return await processSo9Item(item, downloadFolder, deadlineAt, runId, backend);
+      return await processSo9Item(item, downloadFolder, Math.min(backendDeadline, deadlineAt), runId, backend);
     } catch (error) {
       lastError = error;
       if (/RUN_(?:STOPPED|REPLACED)|USER_CANCELED|PERMISSION/.test(error?.message || "")) throw error;

@@ -131,11 +131,11 @@
           </div>
         </div>
         <div id="queueFilters" class="queue-filters" role="tablist">
-          <button type="button" data-filter="all" class="active">Tất cả</button>
-          <button type="button" data-filter="pending">Chờ tải</button>
-          <button type="button" data-filter="running">Đang tải</button>
-          <button type="button" data-filter="success">Thành công</button>
-          <button type="button" data-filter="failed">Thất bại</button>
+          <button type="button" data-filter="all" data-label="Tất cả" class="active">Tất cả</button>
+          <button type="button" data-filter="pending" data-label="Chờ tải">Chờ tải</button>
+          <button type="button" data-filter="running" data-label="Đang tải">Đang tải</button>
+          <button type="button" data-filter="success" data-label="Thành công">Thành công</button>
+          <button type="button" data-filter="failed" data-label="Thất bại">Thất bại</button>
         </div>
         <div id="queueList" class="queue-list empty">Chưa có link nào được tải lên.</div>
         <button id="queueMoreBtn" class="ghost queue-more" type="button" hidden>Xem thêm</button>
@@ -147,10 +147,10 @@
           <button id="exportLogBtn" class="ghost" type="button">Xuất log</button>
         </div>
         <div id="logFilters" class="queue-filters" role="tablist">
-          <button type="button" data-level="all" class="active">Tất cả</button>
-          <button type="button" data-level="info">Thông tin</button>
-          <button type="button" data-level="warn">Cảnh báo</button>
-          <button type="button" data-level="error">Lỗi</button>
+          <button type="button" data-level="all" data-label="Tất cả" class="active">Tất cả</button>
+          <button type="button" data-level="info" data-label="Thông tin">Thông tin</button>
+          <button type="button" data-level="warn" data-label="Cảnh báo">Cảnh báo</button>
+          <button type="button" data-level="error" data-label="Lỗi">Lỗi</button>
         </div>
         <div id="logList" class="log-list" role="log" aria-live="polite"></div>
       </section>

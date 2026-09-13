@@ -32,7 +32,7 @@ checkBackendsBtn.addEventListener("click", async () => {
       <div class="${result.ok ? "ok" : "fail"}">
         <span>${result.ok ? "✔" : "✖"}</span>
         <strong>${new URL(result.site).hostname}</strong>
-        <small>${result.ok ? `${result.status} · ${result.ms} ms` : (result.error || `HTTP ${result.status}`)}</small>
+        <small>${result.ok ? `${result.status} · ${result.ms} ms` : escapeHtml(result.error || `HTTP ${result.status}`)}</small>
       </div>`).join("") || t("Không có nguồn nào để kiểm tra.");
   } catch (error) {
     backendStatus.textContent = t(`Không thể lưu: ${error.message || error}`);
@@ -82,4 +82,13 @@ function normalizeFolder(value) {
     .map((segment) => /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(segment) ? `_${segment}` : segment)
     .join("/");
   return folder || "SO9-Downloads";
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
