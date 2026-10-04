@@ -1,5 +1,14 @@
 # Project History
 
+## 2026-10-04 v2.1.0 — Media pipeline hardening
+- Added shared policy for video, audio, image and subtitle assets with MIME, extension, byte and URL correlation checks.
+- Added identity-aware DOM/structured-data scanning for direct media, YouTube progressive formats and Suno song assets; ambiguous pages now require user selection.
+- Added scan-then-select media UI, canonical asset/variant history, per-item retry, queue merge protection and crawl checkpoints.
+- Hardened MV3 worker recovery, sender validation, fallback listener ordering, provider context persistence and owned-tab cleanup.
+- Added queue byte budgeting and rejected overlong media URLs without truncating authorization signatures.
+- Added deterministic policy/worker/scanner tests, full syntax checker, runtime audit, benchmark harness and isolated Chromium E2E harness.
+- Verified release candidate with `npm run check` (81/81), runtime audit (9/9), benchmark self-test and Chromium E2E (11/11).
+
 ## 2026-05-10
 - User confirmed `Mike-AutomationAI` is working smoothly after the latest extension update.
 - Logo was updated from `E:\3_JOBS\MechaMike.jpg` into PNG extension icons under `icons/`.

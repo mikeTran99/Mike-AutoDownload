@@ -1,6 +1,6 @@
 # Chính sách quyền riêng tư — Mike-Autodownload
 
-Ngày hiệu lực: 10/09/2026
+Ngày hiệu lực: 04/10/2026
 
 Mike-Autodownload là tiện ích Chrome hỗ trợ người dùng tải video, âm thanh và ảnh mà họ có quyền truy cập và được phép tải. Tiện ích không được thiết kế để vượt qua DRM, paywall, đăng nhập, quyền riêng tư, hạn chế tải xuống hoặc cơ chế bảo vệ nội dung.
 
@@ -21,7 +21,7 @@ Danh sách chờ, thiết lập và nhật ký được lưu cục bộ bằng `
 
 Đối với tính năng Telegram, tiện ích mở `https://web.telegram.org/` trong hồ sơ Chrome hiện tại. Telegram xử lý dữ liệu theo chính sách riêng của Telegram. Tiện ích chỉ thao tác với nội dung đang hiển thị mà người dùng đã được cấp quyền xem; tiện ích không thu thập thông tin đăng nhập và không vượt qua quyền truy cập Telegram.
 
-Đối với trang media HTTPS khác, chế độ quét trang xin quyền truy cập origin khi người dùng bắt đầu thao tác. Quyền này được dùng để tìm URL media trực tiếp do trang cung cấp trong DOM, metadata hoặc tài nguyên trang. Riêng chế độ theo dõi mạng tùy chọn xin quyền HTTPS rộng như mô tả bên dưới. Tiện ích không hỗ trợ blob stream, ghép HLS/DASH, DRM hoặc nội dung cần vượt qua đăng nhập.
+Đối với trang media HTTPS khác, chế độ quét trang xin quyền truy cập origin khi người dùng bắt đầu thao tác. Quyền này được dùng để tìm URL media trực tiếp do trang cung cấp trong DOM hoặc metadata. Tiện ích không theo dõi toàn bộ mạng nền và không hỗ trợ blob stream, ghép HLS/DASH, DRM hoặc nội dung cần vượt qua đăng nhập.
 
 
 ## Mục đích sử dụng quyền Chrome
