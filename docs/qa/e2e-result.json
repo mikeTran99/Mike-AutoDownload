@@ -1,0 +1,388 @@
+{
+  "browser": "145.0.7632.6",
+  "profile": "isolated temporary Chromium profile",
+  "checks": [
+    {
+      "name": "UI imports five media URLs",
+      "ok": true
+    },
+    {
+      "name": "Chrome download transport video",
+      "ok": true
+    },
+    {
+      "name": "Chrome download transport audio",
+      "ok": true
+    },
+    {
+      "name": "Chrome download transport image",
+      "ok": true
+    },
+    {
+      "name": "Chrome download transport subtitle",
+      "ok": true
+    },
+    {
+      "name": "HTML payload named .mp4 fails validation",
+      "ok": true
+    },
+    {
+      "name": "Only validated media enters history",
+      "ok": true
+    },
+    {
+      "name": "Repeated UI import preserves queue without duplicate",
+      "ok": true
+    },
+    {
+      "name": "Preview UI selects only checked audio and image (scan response fixture)",
+      "ok": true
+    },
+    {
+      "name": "Light theme and media dialog render",
+      "ok": true
+    },
+    {
+      "name": "Popup has no uncaught JavaScript errors",
+      "ok": true
+    }
+  ],
+  "ui": [
+    {
+      "width": 375,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 1440,
+      "horizontalOverflow": false
+    }
+  ],
+  "liveTikTok": null,
+  "transportState": {
+    "downloadHistory": {
+      "http://127.0.0.1:12445/captions.vtt|subtitle|0|default": {
+        "assetId": "",
+        "canonicalKey": "http://127.0.0.1:12445/captions.vtt|subtitle|0|default",
+        "filename": "C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\captions.vtt",
+        "link": "http://127.0.0.1:12445/captions.vtt",
+        "mediaKind": "subtitle",
+        "time": 1791109103451,
+        "variant": ""
+      },
+      "http://127.0.0.1:12445/cover.png|image|0|default": {
+        "assetId": "",
+        "canonicalKey": "http://127.0.0.1:12445/cover.png|image|0|default",
+        "filename": "C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\cover.png",
+        "link": "http://127.0.0.1:12445/cover.png",
+        "mediaKind": "image",
+        "time": 1791109103235,
+        "variant": ""
+      },
+      "http://127.0.0.1:12445/movie.mp4|video|0|default": {
+        "assetId": "",
+        "canonicalKey": "http://127.0.0.1:12445/movie.mp4|video|0|default",
+        "filename": "C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\movie.mp4",
+        "link": "http://127.0.0.1:12445/movie.mp4",
+        "mediaKind": "video",
+        "time": 1791109102789,
+        "variant": ""
+      },
+      "http://127.0.0.1:12445/song.mp3|audio|0|default": {
+        "assetId": "",
+        "canonicalKey": "http://127.0.0.1:12445/song.mp3|audio|0|default",
+        "filename": "C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\song.mp3",
+        "link": "http://127.0.0.1:12445/song.mp3",
+        "mediaKind": "audio",
+        "time": 1791109103017,
+        "variant": ""
+      }
+    },
+    "logs": [
+      {
+        "level": "info",
+        "message": "Đã xử lý xong danh sách.",
+        "time": 1791109103674
+      },
+      {
+        "level": "error",
+        "message": "Thất bại: http://127.0.0.1:12445/bad.mp4 - DOWNLOAD_MISMATCH: File tải không đúng loại media, rỗng hoặc bị Chrome chặn.",
+        "time": 1791109103670
+      },
+      {
+        "level": "info",
+        "message": "Đang tải link video trực tiếp bằng Chrome API.",
+        "time": 1791109103460
+      },
+      {
+        "level": "info",
+        "message": "Đang xử lý direct: http://127.0.0.1:12445/bad.mp4",
+        "time": 1791109103457
+      },
+      {
+        "level": "info",
+        "message": "Thành công: http://127.0.0.1:12445/captions.vtt",
+        "time": 1791109103452
+      },
+      {
+        "level": "info",
+        "message": "Đang tải link video trực tiếp bằng Chrome API.",
+        "time": 1791109103242
+      },
+      {
+        "level": "info",
+        "message": "Đang xử lý direct: http://127.0.0.1:12445/captions.vtt",
+        "time": 1791109103240
+      },
+      {
+        "level": "info",
+        "message": "Thành công: http://127.0.0.1:12445/cover.png",
+        "time": 1791109103236
+      },
+      {
+        "level": "info",
+        "message": "Đang tải link video trực tiếp bằng Chrome API.",
+        "time": 1791109103027
+      },
+      {
+        "level": "info",
+        "message": "Đang xử lý direct: http://127.0.0.1:12445/cover.png",
+        "time": 1791109103024
+      },
+      {
+        "level": "info",
+        "message": "Thành công: http://127.0.0.1:12445/song.mp3",
+        "time": 1791109103019
+      },
+      {
+        "level": "info",
+        "message": "Đang tải link video trực tiếp bằng Chrome API.",
+        "time": 1791109102798
+      },
+      {
+        "level": "info",
+        "message": "Đang xử lý direct: http://127.0.0.1:12445/song.mp3",
+        "time": 1791109102796
+      },
+      {
+        "level": "info",
+        "message": "Thành công: http://127.0.0.1:12445/movie.mp4",
+        "time": 1791109102790
+      },
+      {
+        "level": "info",
+        "message": "Đang tải link video trực tiếp bằng Chrome API.",
+        "time": 1791109102458
+      },
+      {
+        "level": "info",
+        "message": "Đang xử lý direct: http://127.0.0.1:12445/movie.mp4",
+        "time": 1791109102456
+      },
+      {
+        "level": "info",
+        "message": "Bắt đầu xử lý danh sách link.",
+        "time": 1791109102446
+      },
+      {
+        "level": "info",
+        "message": "Bắt đầu tải lần lượt các link trong danh sách.",
+        "time": 1791109102436
+      },
+      {
+        "level": "info",
+        "message": "Đã nạp 5 link từ ô nhập tay, bỏ qua 0 link trùng",
+        "time": 1791109102301
+      }
+    ],
+    "queue": [
+      {
+        "canonicalKey": "http://127.0.0.1:12445/movie.mp4|video|0|default",
+        "downloaderUrl": "",
+        "id": "1791109102290-0-yectt",
+        "link": "http://127.0.0.1:12445/movie.mp4",
+        "mediaKind": "video",
+        "message": "Đã tải: C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\movie.mp4",
+        "permissionOrigin": "",
+        "platform": "direct",
+        "status": "success",
+        "strategy": "direct-url",
+        "telegramWebUrl": ""
+      },
+      {
+        "canonicalKey": "http://127.0.0.1:12445/song.mp3|audio|0|default",
+        "downloaderUrl": "",
+        "id": "1791109102290-1-n57rz",
+        "link": "http://127.0.0.1:12445/song.mp3",
+        "mediaKind": "audio",
+        "message": "Đã tải: C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\song.mp3",
+        "permissionOrigin": "",
+        "platform": "direct",
+        "status": "success",
+        "strategy": "direct-url",
+        "telegramWebUrl": ""
+      },
+      {
+        "canonicalKey": "http://127.0.0.1:12445/cover.png|image|0|default",
+        "downloaderUrl": "",
+        "id": "1791109102290-2-mg4wc",
+        "link": "http://127.0.0.1:12445/cover.png",
+        "mediaKind": "image",
+        "message": "Đã tải: C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\cover.png",
+        "permissionOrigin": "",
+        "platform": "direct",
+        "status": "success",
+        "strategy": "direct-url",
+        "telegramWebUrl": ""
+      },
+      {
+        "canonicalKey": "http://127.0.0.1:12445/captions.vtt|subtitle|0|default",
+        "downloaderUrl": "",
+        "id": "1791109102290-3-mqaif",
+        "link": "http://127.0.0.1:12445/captions.vtt",
+        "mediaKind": "subtitle",
+        "message": "Đã tải: C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\captions.vtt",
+        "permissionOrigin": "",
+        "platform": "direct",
+        "status": "success",
+        "strategy": "direct-url",
+        "telegramWebUrl": ""
+      },
+      {
+        "canonicalKey": "http://127.0.0.1:12445/bad.mp4|video|0|default",
+        "downloaderUrl": "",
+        "id": "1791109102290-4-6q5dx",
+        "link": "http://127.0.0.1:12445/bad.mp4",
+        "mediaKind": "video",
+        "message": "DOWNLOAD_MISMATCH: File tải không đúng loại media, rỗng hoặc bị Chrome chặn.",
+        "permissionOrigin": "",
+        "platform": "direct",
+        "status": "failed",
+        "strategy": "direct-url",
+        "telegramWebUrl": ""
+      }
+    ],
+    "runState": {
+      "paused": false,
+      "running": false
+    }
+  },
+  "downloads": [
+    {
+      "byExtensionId": "hnmnnolhocglnoomjgbednefdlajljch",
+      "byExtensionName": "Mike-Autodownload",
+      "bytesReceived": 49,
+      "canResume": false,
+      "danger": "safe",
+      "endTime": "2026-10-04T10:18:23.446Z",
+      "exists": true,
+      "fileSize": 49,
+      "filename": "C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\captions.vtt",
+      "finalUrl": "http://127.0.0.1:12445/captions.vtt",
+      "id": 4,
+      "incognito": false,
+      "mime": "text/vtt",
+      "paused": false,
+      "referrer": "",
+      "startTime": "2026-10-04T10:18:23.246Z",
+      "state": "complete",
+      "totalBytes": 49,
+      "url": "http://127.0.0.1:12445/captions.vtt"
+    },
+    {
+      "byExtensionId": "hnmnnolhocglnoomjgbednefdlajljch",
+      "byExtensionName": "Mike-Autodownload",
+      "bytesReceived": 68,
+      "canResume": false,
+      "danger": "safe",
+      "endTime": "2026-10-04T10:18:23.230Z",
+      "exists": true,
+      "fileSize": 68,
+      "filename": "C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\cover.png",
+      "finalUrl": "http://127.0.0.1:12445/cover.png",
+      "id": 3,
+      "incognito": false,
+      "mime": "image/png",
+      "paused": false,
+      "referrer": "",
+      "startTime": "2026-10-04T10:18:23.032Z",
+      "state": "complete",
+      "totalBytes": 68,
+      "url": "http://127.0.0.1:12445/cover.png"
+    },
+    {
+      "byExtensionId": "hnmnnolhocglnoomjgbednefdlajljch",
+      "byExtensionName": "Mike-Autodownload",
+      "bytesReceived": 36,
+      "canResume": false,
+      "danger": "safe",
+      "endTime": "2026-10-04T10:18:23.664Z",
+      "exists": true,
+      "fileSize": 36,
+      "filename": "C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\bad.mp4",
+      "finalUrl": "http://127.0.0.1:12445/bad.mp4",
+      "id": 5,
+      "incognito": false,
+      "mime": "text/html",
+      "paused": false,
+      "referrer": "",
+      "startTime": "2026-10-04T10:18:23.464Z",
+      "state": "complete",
+      "totalBytes": 36,
+      "url": "http://127.0.0.1:12445/bad.mp4"
+    },
+    {
+      "byExtensionId": "hnmnnolhocglnoomjgbednefdlajljch",
+      "byExtensionName": "Mike-Autodownload",
+      "bytesReceived": 31,
+      "canResume": false,
+      "danger": "safe",
+      "endTime": "2026-10-04T10:18:23.011Z",
+      "exists": true,
+      "fileSize": 31,
+      "filename": "C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\song.mp3",
+      "finalUrl": "http://127.0.0.1:12445/song.mp3",
+      "id": 2,
+      "incognito": false,
+      "mime": "audio/mpeg",
+      "paused": false,
+      "referrer": "",
+      "startTime": "2026-10-04T10:18:22.801Z",
+      "state": "complete",
+      "totalBytes": 31,
+      "url": "http://127.0.0.1:12445/song.mp3"
+    },
+    {
+      "byExtensionId": "hnmnnolhocglnoomjgbednefdlajljch",
+      "byExtensionName": "Mike-Autodownload",
+      "bytesReceived": 24,
+      "canResume": false,
+      "danger": "safe",
+      "endTime": "2026-10-04T10:18:22.783Z",
+      "exists": true,
+      "fileSize": 24,
+      "filename": "C:\\Users\\Mr Trung\\.codex\\worktrees\\3a18\\autodownload\\tmp\\chromium-media-sUwbmY\\downloads\\movie.mp4",
+      "finalUrl": "http://127.0.0.1:12445/movie.mp4",
+      "id": 1,
+      "incognito": false,
+      "mime": "video/mp4",
+      "paused": false,
+      "referrer": "",
+      "startTime": "2026-10-04T10:18:22.471Z",
+      "state": "complete",
+      "totalBytes": 24,
+      "url": "http://127.0.0.1:12445/movie.mp4"
+    }
+  ],
+  "notes": [
+    "Uses real MV3 worker, popup, storage and Chrome Downloads API in isolated Chromium.",
+    "Local binary fixture transport tests metadata validation; MP4/MP3 fixtures are not playable content.",
+    "Preview scanner response is a fixture; live site extraction is tested separately.",
+    "Screenshots have no previous committed baseline; visual regression verdict is inconclusive.",
+    "This is not verification of every website or of the user's existing Chrome profile."
+  ],
+  "consoleErrors": []
+}

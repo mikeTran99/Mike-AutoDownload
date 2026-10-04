@@ -32,7 +32,7 @@ checkBackendsBtn.addEventListener("click", async () => {
       <div class="${result.ok ? "ok" : "fail"}">
         <span>${result.ok ? "✔" : "✖"}</span>
         <strong>${new URL(result.site).hostname}</strong>
-        <small>${result.ok ? `${result.status} · ${result.ms} ms` : escapeHtml(result.error || `HTTP ${result.status}`)}</small>
+        <small>${escapeHtml(result.error || (result.level === "blocked" ? "Trang yêu cầu xác minh" : result.form ? "Có form tải · chưa kiểm tải thực tế" : "Chỉ kiểm kết nối · chưa thấy form"))} · ${result.status} · ${result.ms} ms</small>
       </div>`).join("") || t("Không có nguồn nào để kiểm tra.");
   } catch (error) {
     backendStatus.textContent = t(`Không thể lưu: ${error.message || error}`);

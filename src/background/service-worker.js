@@ -1,11 +1,15 @@
 import { t } from "../shared/i18n.js";
 import { computeChannelMetrics, postedAtFromLink, parseRelativeAge, channelFolderName } from "../shared/analytics.js";
+import { collectPageMedia, selectMediaCandidate } from "../shared/media-scanner.js";
+import { classifyMedia, canonicalMediaKey, getMediaExtension, validateMediaDownload, matchesDownloadSource, mergeQueueItems } from "../shared/media-policy.js";
 
 
 const JOB_STATE_KEY = "jobState";
 const JOB_SCHEMA_VERSION = 1;
 const RUNNER_ALARM = "mike-automation-runner";
 const MAX_ITEM_ATTEMPTS = 2;
+const MAX_QUEUE_BYTES = 4 * 1024 * 1024;
+const MAX_MEDIA_URL_LENGTH = 8192;
 
 // Thứ tự nguồn tải cho từng nền tảng. "native" = đọc URL video ngay trên trang gốc
 // (dùng phiên đăng nhập Chrome hiện tại); còn lại là trang downloader bên thứ ba.
@@ -37,8 +41,8 @@ if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  workerReady.then(() => handleMessage(message, sender)).then(sendResponse).catch((error) => {
-    appendLog(error.message || String(error), "error");
+  workerReady.then(() => handleMessage(message, sender)).then(sendResponse).catch(async (error) => {
+    await appendLog(error.message || String(error), "error").catch(() => {});
     sendResponse({ ok: false, error: error.message || String(error) });
   });
   return true;
@@ -61,6 +65,33 @@ const workerReady = initializeWorkerState();
 workerReady.then(() => resumePersistedJob("Worker được khởi tạo")).catch(console.error);
 
 async function handleMessage(message, sender = {}) {
+  if (!message || typeof message.type !== "string" || (sender.id && sender.id !== chrome.runtime.id)) {
+    return { ok: false, error: "Lệnh không hợp lệ." };
+  }
+  if (message.type === "CRAWL_CHECKPOINT") {
+    if (!crawlLock || sender.tab?.id !== activeTabId || !Array.isArray(message.items)) return { ok: false };
+    await serializeStorageMutation(async () => {
+      const data = await chrome.storage.local.get(["crawlJob"]);
+      const job = data.crawlJob;
+      if (job?.status !== "running") return;
+      const merged = mergeQueueWithinBudget(job.items || [], message.items);
+      await chrome.storage.local.set({ crawlJob: { ...job, items: merged.items, updatedAt: Date.now() } });
+    });
+    return { ok: true, canceled: crawlCancelRequested };
+  }
+  if (sender.tab && !sender.url?.startsWith(chrome.runtime.getURL(""))) {
+    return { ok: false, error: "Lệnh này chỉ dùng trong giao diện extension." };
+  }
+  if (message.type.startsWith("QUEUE_") || message.type === "CLEAR_LOCAL_DATA") {
+    return await mutateQueue(message);
+  }
+  if (message.type === "APPEND_UI_LOGS") {
+    for (const log of (Array.isArray(message.logs) ? message.logs : []).slice(0, 100)) {
+      await appendLog(String(log.message || "").slice(0, 2000), ["info","warn","error"].includes(log.level) ? log.level : "info");
+    }
+    return { ok: true };
+  }
+  if (message.type === "SCAN_MEDIA_PAGE") return await previewMediaPage(message.link);
   if (message.type === "START_RUN") {
     if (runLock || crawlLock) {
       return { ok: false, error: crawlLock ? "Đang quét kênh, vui lòng chờ hoàn tất." : "Đang có tiến trình chạy." };
@@ -80,6 +111,9 @@ async function handleMessage(message, sender = {}) {
     crawlLock = true;
     crawlCancelRequested = false;
     try {
+    await chrome.storage.local.set({ crawlJob: { id: crypto.randomUUID(), status: "running", sourceUrl: message.channelUrl,
+      maxCount: message.maxCount, minViews: message.minViews, folder: message.folder, items: [], startedAt: Date.now() } });
+    await publishState();
       return await crawlChannelVideos(message.channelUrl, message.maxCount, message.folder, message.minViews, { statsOnly: Boolean(message.statsOnly) });
     } catch (error) {
       if (crawlCancelRequested) return { ok: false, error: "Đã dừng quét kênh/profile." };
@@ -87,6 +121,8 @@ async function handleMessage(message, sender = {}) {
     } finally {
       crawlLock = false;
       crawlCancelRequested = false;
+      const data = await chrome.storage.local.get(["crawlJob"]);
+      await chrome.storage.local.set({ crawlJob: { ...data.crawlJob, status: "idle", updatedAt: Date.now() } });
       await publishState();
     }
   }
@@ -96,8 +132,17 @@ async function handleMessage(message, sender = {}) {
     const results = await Promise.all(sites.map(async (site) => {
       const startedAt = Date.now();
       try {
-        const response = await fetch(site, { method: "GET", cache: "no-store", redirect: "follow" });
-        return { site, ok: response.ok, status: response.status, ms: Date.now() - startedAt };
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        try {
+          const response = await fetch(site, { method: "GET", cache: "no-store", redirect: "follow", signal: controller.signal });
+          const html = (await response.text()).slice(0, 1000000);
+          const hasForm = /<(?:input|textarea)\b[^>]*(?:url|link|placeholder)/i.test(html) &&
+            /<(?:button|input)\b[^>]*(?:submit|download|btn)|download|tải xuống/i.test(html);
+          const blocked = /captcha|cloudflare|access denied/i.test(html);
+          return { site, ok: response.ok && hasForm && !blocked, reachable: response.ok, form: hasForm,
+            level: blocked ? "blocked" : hasForm ? "form" : "reachable", status: response.status, ms: Date.now() - startedAt };
+        } finally { clearTimeout(timer); }
       } catch (error) {
         return { site, ok: false, status: 0, ms: Date.now() - startedAt, error: error.message || String(error) };
       }
@@ -158,6 +203,8 @@ function createIdleJobState() {
     activeTabId: null,
     activeTabUrl: "",
     activeDownloadIds: [],
+    mediaKind: "video",
+    downloadContext: null,
     stage: "idle",
     deadlineAt: 0,
     attempt: 0,
@@ -165,6 +212,106 @@ function createIdleJobState() {
     startedAt: 0,
     updatedAt: Date.now()
   };
+}
+
+async function mutateQueue(message) {
+  return await serializeStorageMutation(async () => {
+    if (runLock || crawlLock) return { ok: false, error: "Hãy dừng tiến trình trước khi sửa danh sách." };
+    const data = await chrome.storage.local.get(["queue", "downloadHistory"]);
+    let queue = data.queue || [];
+    let result = {};
+    if (message.type === "QUEUE_APPEND") {
+      if (!Array.isArray(message.items) || message.items.length > 5000) return { ok: false, error: "Tối đa 5.000 mục mỗi lượt nạp." };
+      const incoming = message.items.map((item) => ({
+        ...item, id: String(item?.id || crypto.randomUUID()).slice(0, 100),
+        link: String(item?.link || "")
+      }));
+      if (incoming.some((item) => item.link.length > MAX_MEDIA_URL_LENGTH)) {
+        return { ok: false, error: `URL media vượt quá ${MAX_MEDIA_URL_LENGTH} ký tự; giữ nguyên URL và nạp lại sau khi chọn nguồn ngắn hơn.` };
+      }
+      result = mergeQueueWithinBudget(queue, incoming, { history: data.downloadHistory });
+      queue = result.items;
+    } else if (message.type === "QUEUE_REMOVE") queue = queue.filter((item) => item.id !== message.id);
+    else if (message.type === "QUEUE_PRUNE") queue = queue.filter((item) => !["success","unsupported","skipped"].includes(item.status));
+    else if (message.type === "QUEUE_RETRY") queue = queue.map((item) => item.id === message.id && item.status !== "unsupported"
+      ? { ...item, status: "pending", message: "Chờ tải lại theo yêu cầu" } : item);
+    else if (message.type === "QUEUE_CLEAR" || message.type === "CLEAR_LOCAL_DATA") queue = [];
+    else return { ok: false, error: "Lệnh danh sách không hợp lệ." };
+    if (new TextEncoder().encode(JSON.stringify(queue)).length > MAX_QUEUE_BYTES) {
+      return { ok: false, error: "Danh sách vượt 4 MB. Hãy dọn các mục đã xong trước khi nạp thêm." };
+    }
+    const patch = { queue };
+    if (message.type === "QUEUE_CLEAR") patch.logs = [];
+    if (message.type === "CLEAR_LOCAL_DATA") Object.assign(patch, {
+      logs: [], savedReelLinks: [], savedReelItems: [], lastCrawlSource: "", lastCrawlTime: 0,
+      channelStats: {}, downloadHistory: {}, crawlJob: null
+    });
+    await chrome.storage.local.set(patch);
+    return { ok: true, ...result, queue };
+  });
+}
+
+async function mergeCrawlResults(patch, incoming, statsOnly = false) {
+  await serializeStorageMutation(async () => {
+    const data = await chrome.storage.local.get(["queue", "downloadHistory"]);
+    const merged = mergeQueueWithinBudget(data.queue || [], incoming, { history: data.downloadHistory });
+    await chrome.storage.local.set({ ...patch, ...(statsOnly ? {} : { queue: merged.items }) });
+  });
+}
+
+function mergeQueueWithinBudget(existing, incoming, options = {}) {
+  const all = Array.isArray(incoming) ? incoming : [];
+  const full = mergeQueueItems(existing, all, options);
+  if (new TextEncoder().encode(JSON.stringify(full.items)).length <= MAX_QUEUE_BYTES) return full;
+
+  let items = Array.isArray(existing) ? [...existing] : [];
+  const acceptedCandidates = [];
+  let skippedByLimit = 0;
+  for (const candidate of all) {
+    const next = mergeQueueItems(items, [candidate], options);
+    if (next.items.length === items.length || new TextEncoder().encode(JSON.stringify(next.items)).length <= MAX_QUEUE_BYTES) {
+      items = next.items;
+      acceptedCandidates.push(candidate);
+    } else {
+      skippedByLimit += 1;
+    }
+  }
+  const result = mergeQueueItems(existing, acceptedCandidates, options);
+  return { ...result, items, limitSkipped: skippedByLimit };
+}
+
+async function checkpointCrawlTab(tabId, sourceUrl) {
+  await serializeStorageMutation(async () => {
+    const data = await chrome.storage.local.get(["crawlJob"]);
+    if (data.crawlJob?.status === "running") {
+      await chrome.storage.local.set({ crawlJob: { ...data.crawlJob, tabId, sourceUrl } });
+    }
+  });
+}
+
+async function previewMediaPage(link) {
+  if (runLock || crawlLock) return { ok: false, error: "Đang có tiến trình chạy." };
+  const url = parseHttpUrl(link);
+  if (url.protocol !== "https:") return { ok: false, error: "Chỉ quét trang HTTPS." };
+  crawlLock = true;
+  let tab;
+  try {
+    const origin = url.origin + "/*";
+    if (!await chrome.permissions.contains({ origins: [origin] })) return { ok: false, error: "PERMISSION: Chưa có quyền đọc trang." };
+    tab = await chrome.tabs.create({ url: url.href, active: false });
+    activeTabId = tab.id;
+    await publishState();
+    await waitForTabComplete(tab.id, 30000);
+    assertCrawlActive();
+    const scan = await scanDirectMediaPage(tab.id);
+    return { ok: true, scan };
+  } finally {
+    if (tab) await chrome.tabs.remove(tab.id).catch(() => {});
+    activeTabId = null;
+    crawlLock = false;
+    crawlCancelRequested = false;
+    await publishState();
+  }
 }
 
 function normalizeJobState(value) {
@@ -180,7 +327,7 @@ function normalizeJobState(value) {
 }
 
 async function initializeWorkerState() {
-  const data = await chrome.storage.local.get([JOB_STATE_KEY]);
+  const data = await chrome.storage.local.get([JOB_STATE_KEY, "crawlJob"]);
   currentJob = normalizeJobState(data[JOB_STATE_KEY]);
   const resumable = ["running", "paused", "stopping"].includes(currentJob.status) && currentJob.runId;
 
@@ -195,6 +342,15 @@ async function initializeWorkerState() {
     runState: { running: runLock, paused },
     [JOB_STATE_KEY]: currentJob
   });
+  if (data.crawlJob?.status === "running") {
+    await closeOwnedTab(data.crawlJob.tabId, data.crawlJob.sourceUrl);
+    await chrome.storage.local.set({
+      crawlJob: { ...data.crawlJob, status: "interrupted", updatedAt: Date.now() },
+      savedReelItems: (data.crawlJob.items || []).slice(0, 5000),
+      savedReelLinks: (data.crawlJob.items || []).slice(0, 5000).map((item) => item.link)
+    });
+    await appendLog("Lượt quét bị gián đoạn. Kết quả từng đợt đã được giữ; dùng Quét lại để tiếp tục.", "warn");
+  }
 }
 
 function serializeStorageMutation(task) {
@@ -232,6 +388,10 @@ async function clearRunnerAlarm() {
 }
 
 async function startNewRun(folder) {
+  // Reserve the job before the first await; two panels may start together.
+  if (runLock) return { ok: false, error: "Đang có tiến trình chạy." };
+  runLock = true;
+  try {
   const data = await chrome.storage.local.get(["queue", "downloadFolder"]);
   let queueChanged = false;
   const queue = (data.queue || []).map((item) => {
@@ -245,7 +405,10 @@ async function startNewRun(folder) {
     .filter((item) => item.status === "pending" || item.status === "failed")
     .map((item) => item.id);
 
-  if (!itemIds.length) return { ok: false, error: "Không có link hợp lệ để tải." };
+  if (!itemIds.length) {
+    runLock = false;
+    return { ok: false, error: "Không có link hợp lệ để tải." };
+  }
 
   currentRunId = crypto.randomUUID();
   runLock = true;
@@ -267,6 +430,13 @@ async function startNewRun(folder) {
   launchRunner(currentJob.folder, currentRunId);
   await publishState();
   return { ok: true, runId: currentRunId };
+  } catch (error) {
+    runLock = false;
+    currentRunId = "";
+    await updateJobState(createIdleJobState()).catch(() => {});
+    await clearRunnerAlarm();
+    throw error;
+  }
 }
 
 function migrateQueueItem(item) {
@@ -390,8 +560,10 @@ function readProfileHeaderInPage() {
     const value = Number.parseFloat(match[1].replace(",", "."));
     const plain = Number.parseInt(match[1].replace(/[.,]/g, ""), 10);
     const multiplier = ["k", "n", "nghin", "ngan"].includes(suffix) ? 1000
-      : ["m", "tr", "trieu", "万"].includes(suffix) ? 1000000
-        : ["b", "ty", "亿"].includes(suffix) ? 1000000000 : 0;
+      : suffix === "万" ? 10000
+        : suffix === "亿" ? 100000000
+          : ["m", "tr", "trieu"].includes(suffix) ? 1000000
+            : ["b", "ty"].includes(suffix) ? 1000000000 : 0;
     return multiplier ? Math.round(value * multiplier) : plain || 0;
   }
 
@@ -434,15 +606,19 @@ const MAX_STATS_ITEMS = 200;
 const MAX_DOWNLOAD_HISTORY = 5000;
 
 // Lịch sử link đã tải thành công: để dashboard đánh dấu "chưa tải" và import bỏ qua link đã reup.
-async function rememberDownloaded(link, filename) {
-  const data = await chrome.storage.local.get(["downloadHistory"]);
-  const history = data.downloadHistory || {};
-  history[link] = { time: Date.now(), filename: filename || "" };
-  const keys = Object.keys(history);
-  if (keys.length > MAX_DOWNLOAD_HISTORY) {
-    for (const key of keys.sort((a, b) => history[a].time - history[b].time).slice(0, keys.length - MAX_DOWNLOAD_HISTORY)) delete history[key];
-  }
-  await chrome.storage.local.set({ downloadHistory: history });
+async function rememberDownloaded(value, filename) {
+  const item = typeof value === "string" ? { link: value } : value;
+  const key = canonicalMediaKey(item);
+  if (!key) return;
+  await serializeStorageMutation(async () => {
+    const data = await chrome.storage.local.get(["downloadHistory"]);
+    const history = data.downloadHistory || {};
+    history[key] = { canonicalKey: key, link: item.link, mediaKind: item.mediaKind || currentJob.mediaKind || "video",
+      assetId: item.assetId || "", variant: item.variant || "", time: Date.now(), filename: filename || "" };
+    const keys = Object.keys(history);
+    for (const expired of keys.sort((a,b) => history[b].time - history[a].time).slice(MAX_DOWNLOAD_HISTORY)) delete history[expired];
+    await chrome.storage.local.set({ downloadHistory: history });
+  });
 }
 
 async function recordChannelStats(sourceUrl, platform, result) {
@@ -460,9 +636,17 @@ async function recordChannelStats(sourceUrl, platform, result) {
     thumbnail: item.thumbnail || "",
     postedAt: postedAtFromLink(item.link, platform) || Number(item.postedAt) || 0
   }));
+  const downloadedKeys = new Set();
+  for (const [key, record] of Object.entries(data.downloadHistory || {})) {
+    downloadedKeys.add(key);
+    if (record?.link) downloadedKeys.add(record.link);
+    const canonical = typeof canonicalMediaKey === "function" ? canonicalMediaKey(record || {}) : "";
+    if (canonical) downloadedKeys.add(canonical);
+  }
+  const itemKey = (item) => typeof canonicalMediaKey === "function" ? canonicalMediaKey(item) : item?.link || "";
   const metrics = computeChannelMetrics(items, {
     previousLinks: new Set((previous.items || []).map((item) => item.link)),
-    downloadedLinks: new Set(Object.keys(data.downloadHistory || {})),
+    downloadedLinks: new Set(items.filter((item) => downloadedKeys.has(item.link) || downloadedKeys.has(itemKey(item))).map((item) => item.link)),
     now: time
   });
   // ponytail: chỉ giữ thumbnail cho top 10 để 50 kênh × 200 video không vượt quota storage.
@@ -520,6 +704,7 @@ async function crawlFacebookReels(channelUrl, maxCount, folder, minViews, option
   await appendLog(`Đang mở kênh Facebook: ${sourceUrl}`, "info");
   const tab = await chrome.tabs.create({ url: sourceUrl, active: true });
   activeTabId = tab.id;
+  await checkpointCrawlTab(tab.id, sourceUrl);
 
   try {
     await waitForTabComplete(tab.id, 45000);
@@ -565,26 +750,25 @@ async function crawlFacebookReels(channelUrl, maxCount, folder, minViews, option
       message: item.viewText || item.views ? `View: ${item.viewText || formatNumber(item.views)}` : "Chờ xử lý"
     }));
 
-    await chrome.storage.local.set({
+    await mergeCrawlResults({
       savedReelLinks: links,
       savedReelItems: items,
       lastCrawlSource: sourceUrl,
       lastCrawlTime,
       lastCrawlMax: limit,
       lastMinViews: minimumViews,
-      lastCrawlPlatform: "facebook",
-      ...(statsOnly ? {} : { queue })
-    });
+      lastCrawlPlatform: "facebook"
+    }, queue, statsOnly);
 
     await appendLog(`Đã lấy được ${links.length} link Reels, bỏ qua ${skipped} link trùng/không hợp lệ.`, "info");
     await appendLog(`Đã bỏ qua ${skippedByView} video dưới ngưỡng view.`, "info");
     await appendLog(`${missingView} video không đọc được view.`, minimumViews > 0 && missingView > 0 ? "warn" : "info");
-    if (!statsOnly) await appendLog(`Đã đưa ${queue.length} link Facebook vào danh sách tải.`, \"info\");
+    if (!statsOnly) await appendLog(`Đã đưa ${queue.length} link Facebook vào danh sách tải.`, "info");
     assertCrawlActive();
     if (statsOnly) {
       await appendLog("Chế độ chỉ thống kê: không đưa link vào danh sách tải.", "info");
     } else {
-      await startRunQueueAfterCrawl(folder);
+      await appendLog("Kết quả đã thêm vào danh sách. Chọn mục cần tải và bấm Chạy automation.", "info");
     }
     return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime, profile };
   } catch (error) {
@@ -613,6 +797,7 @@ async function crawlTikTokProfile(channelUrl, maxCount, folder, minViews, option
   await appendLog(`Đang mở kênh TikTok: ${sourceUrl}`, "info");
   const tab = await chrome.tabs.create({ url: sourceUrl, active: true });
   activeTabId = tab.id;
+  await checkpointCrawlTab(tab.id, sourceUrl);
 
   try {
     await waitForTabComplete(tab.id, 45000);
@@ -658,26 +843,25 @@ async function crawlTikTokProfile(channelUrl, maxCount, folder, minViews, option
       message: item.viewText || item.views ? `View: ${item.viewText || formatNumber(item.views)}` : "Chờ xử lý"
     }));
 
-    await chrome.storage.local.set({
+    await mergeCrawlResults({
       savedReelLinks: links,
       savedReelItems: items,
       lastCrawlSource: sourceUrl,
       lastCrawlTime,
       lastCrawlMax: limit,
       lastMinViews: minimumViews,
-      lastCrawlPlatform: "tiktok",
-      ...(statsOnly ? {} : { queue })
-    });
+      lastCrawlPlatform: "tiktok"
+    }, queue, statsOnly);
 
     await appendLog(`Đã lấy được ${links.length} link TikTok, bỏ qua ${skipped} link trùng/không hợp lệ.`, "info");
     await appendLog(`Đã bỏ qua ${skippedByView} video TikTok dưới ngưỡng view.`, "info");
     await appendLog(`${missingView} video TikTok không đọc được view.`, minimumViews > 0 && missingView > 0 ? "warn" : "info");
-    if (!statsOnly) await appendLog(`Đã đưa ${queue.length} link TikTok vào danh sách tải.`, \"info\");
+    if (!statsOnly) await appendLog(`Đã đưa ${queue.length} link TikTok vào danh sách tải.`, "info");
     assertCrawlActive();
     if (statsOnly) {
       await appendLog("Chế độ chỉ thống kê: không đưa link vào danh sách tải.", "info");
     } else {
-      await startRunQueueAfterCrawl(folder);
+      await appendLog("Kết quả đã thêm vào danh sách. Chọn mục cần tải và bấm Chạy automation.", "info");
     }
     return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime, profile };
   } catch (error) {
@@ -769,10 +953,17 @@ async function crawlYouTubeChannel(channelUrl, maxCount, folder, minViews, optio
 
 function crawlYouTubeVideosInPage(limit, minViews) {
   const unlimited = limit === null || limit === undefined || String(limit).trim() === "";
-  const maxCount = unlimited ? Number.MAX_SAFE_INTEGER : Number(limit);
+  const maxCount = unlimited ? 5000 : Math.min(5000, Number(limit));
   if (!Number.isSafeInteger(maxCount) || maxCount < 1) throw new Error("Số lượng phải là số nguyên dương hoặc để trống.");
   const minimumViews = Math.max(0, Number(minViews) || 0);
   const items = new Map();
+  let lastCheckpointSize = 0;
+  function checkpoint() {
+    if (items.size === lastCheckpointSize || !globalThis.chrome?.runtime?.sendMessage) return;
+    const batch = Array.from(items.values()).slice(lastCheckpointSize);
+    lastCheckpointSize = items.size;
+    chrome.runtime.sendMessage({ type: "CRAWL_CHECKPOINT", items: batch }).catch(() => {});
+  }
   let skipped = 0;
   let skippedByView = 0;
   let missingView = 0;
@@ -833,7 +1024,7 @@ function crawlYouTubeVideosInPage(limit, minViews) {
         platform: "youtube",
         downloaderUrl: "https://en1.savefrom.net/"
       });
-      if (!unlimited && items.size >= maxCount) break;
+      if (items.size >= maxCount) break;
     }
   };
 
@@ -846,7 +1037,8 @@ function crawlYouTubeVideosInPage(limit, minViews) {
     });
     const tick = () => {
       collect();
-      if ((!unlimited && items.size >= maxCount) || staleScrolls >= 6) {
+      checkpoint();
+      if ((items.size >= maxCount) || staleScrolls >= 6) {
         finish();
         return;
       }
@@ -881,6 +1073,7 @@ async function crawlPublicProfile({
   await appendLog(`Đang mở profile ${label}: ${sourceUrl}`, "info");
   const tab = await chrome.tabs.create({ url: sourceUrl, active: true });
   activeTabId = tab.id;
+  await checkpointCrawlTab(tab.id, sourceUrl);
 
   try {
     await waitForTabComplete(tab.id, 45000);
@@ -926,26 +1119,25 @@ async function crawlPublicProfile({
       message: item.viewText || item.views ? `View: ${item.viewText || formatNumber(item.views)}` : "Chờ xử lý"
     }));
 
-    await chrome.storage.local.set({
+    await mergeCrawlResults({
       savedReelLinks: links,
       savedReelItems: items,
       lastCrawlSource: sourceUrl,
       lastCrawlTime,
       lastCrawlMax: limit,
       lastMinViews: minimumViews,
-      lastCrawlPlatform: platform,
-      ...(statsOnly ? {} : { queue })
-    });
+      lastCrawlPlatform: platform
+    }, queue, statsOnly);
 
     await appendLog(`Đã lấy được ${links.length} ${itemLabel}, bỏ qua ${skipped} link trùng/không hợp lệ.`, "info");
     await appendLog(`Đã bỏ qua ${skippedByView} video dưới ngưỡng view.`, "info");
     await appendLog(`${missingView} video không đọc được view.`, minimumViews > 0 && missingView > 0 ? "warn" : "info");
-    if (!statsOnly) await appendLog(`Đã đưa ${queue.length} link ${label} vào danh sách tải.`, \"info\");
+    if (!statsOnly) await appendLog(`Đã đưa ${queue.length} link ${label} vào danh sách tải.`, "info");
     assertCrawlActive();
     if (statsOnly) {
       await appendLog("Chế độ chỉ thống kê: không đưa link vào danh sách tải.", "info");
     } else {
-      await startRunQueueAfterCrawl(folder);
+      await appendLog("Kết quả đã thêm vào danh sách. Chọn mục cần tải và bấm Chạy automation.", "info");
     }
     return { ok: true, links, items, skipped, skippedByView, missingView, lastCrawlTime, profile };
   } catch (error) {
@@ -973,10 +1165,17 @@ async function startRunQueueAfterCrawl(folder) {
 
 function crawlFacebookReelsInPage(limit, minViews) {
   const unlimited = limit === null || limit === undefined || String(limit).trim() === "";
-  const maxCount = unlimited ? Number.MAX_SAFE_INTEGER : Number(limit);
+  const maxCount = unlimited ? 5000 : Math.min(5000, Number(limit));
   if (!Number.isSafeInteger(maxCount) || maxCount < 1) throw new Error("Số lượng phải là số nguyên dương hoặc để trống.");
   const minimumViews = Math.max(0, Number(minViews) || 0);
   const items = new Map();
+  let lastCheckpointSize = 0;
+  function checkpoint() {
+    if (items.size === lastCheckpointSize || !globalThis.chrome?.runtime?.sendMessage) return;
+    const batch = Array.from(items.values()).slice(lastCheckpointSize);
+    lastCheckpointSize = items.size;
+    chrome.runtime.sendMessage({ type: "CRAWL_CHECKPOINT", items: batch }).catch(() => {});
+  }
   let skipped = 0;
   let skippedByView = 0;
   let missingView = 0;
@@ -1038,14 +1237,15 @@ function crawlFacebookReelsInPage(limit, minViews) {
           platform: "facebook",
           downloaderUrl: "https://so9.vn/9downloader/facebook"
         });
-        if (!unlimited && items.size >= maxCount) break;
+        if (items.size >= maxCount) break;
       }
     };
 
     const tick = () => {
       collect();
+      checkpoint();
 
-      if ((!unlimited && items.size >= maxCount) || staleScrolls >= 6) {
+      if ((items.size >= maxCount) || staleScrolls >= 6) {
         resolve({
           items: unlimited ? Array.from(items.values()) : Array.from(items.values()).slice(0, maxCount),
           skipped,
@@ -1164,10 +1364,17 @@ function crawlFacebookReelsInPage(limit, minViews) {
 
 function crawlTikTokVideosInPage(limit, minViews) {
   const unlimited = limit === null || limit === undefined || String(limit).trim() === "";
-  const maxCount = unlimited ? Number.MAX_SAFE_INTEGER : Number(limit);
+  const maxCount = unlimited ? 5000 : Math.min(5000, Number(limit));
   if (!Number.isSafeInteger(maxCount) || maxCount < 1) throw new Error("Số lượng phải là số nguyên dương hoặc để trống.");
   const minimumViews = Math.max(0, Number(minViews) || 0);
   const items = new Map();
+  let lastCheckpointSize = 0;
+  function checkpoint() {
+    if (items.size === lastCheckpointSize || !globalThis.chrome?.runtime?.sendMessage) return;
+    const batch = Array.from(items.values()).slice(lastCheckpointSize);
+    lastCheckpointSize = items.size;
+    chrome.runtime.sendMessage({ type: "CRAWL_CHECKPOINT", items: batch }).catch(() => {});
+  }
   let skipped = 0;
   let skippedByView = 0;
   let missingView = 0;
@@ -1225,14 +1432,15 @@ function crawlTikTokVideosInPage(limit, minViews) {
           platform: "tiktok",
           downloaderUrl: "https://so9.vn/9downloader/tiktok"
         });
-        if (!unlimited && items.size >= maxCount) break;
+        if (items.size >= maxCount) break;
       }
     };
 
     const tick = () => {
       collect();
+      checkpoint();
 
-      if ((!unlimited && items.size >= maxCount) || staleScrolls >= 7) {
+      if ((items.size >= maxCount) || staleScrolls >= 7) {
         resolve({
           items: unlimited ? Array.from(items.values()) : Array.from(items.values()).slice(0, maxCount),
           skipped,
@@ -1346,10 +1554,17 @@ function crawlTikTokVideosInPage(limit, minViews) {
 
 function crawlPublicVideoLinksInPage(limit, minViews, platform) {
   const unlimited = limit === null || limit === undefined || String(limit).trim() === "";
-  const maxCount = unlimited ? Number.MAX_SAFE_INTEGER : Number(limit);
+  const maxCount = unlimited ? 5000 : Math.min(5000, Number(limit));
   if (!Number.isSafeInteger(maxCount) || maxCount < 1) throw new Error("Số lượng phải là số nguyên dương hoặc để trống.");
   const minimumViews = Math.max(0, Number(minViews) || 0);
   const items = new Map();
+  let lastCheckpointSize = 0;
+  function checkpoint() {
+    if (items.size === lastCheckpointSize || !globalThis.chrome?.runtime?.sendMessage) return;
+    const batch = Array.from(items.values()).slice(lastCheckpointSize);
+    lastCheckpointSize = items.size;
+    chrome.runtime.sendMessage({ type: "CRAWL_CHECKPOINT", items: batch }).catch(() => {});
+  }
   let skipped = 0;
   let skippedByView = 0;
   let missingView = 0;
@@ -1404,7 +1619,7 @@ function crawlPublicVideoLinksInPage(limit, minViews, platform) {
             ? "https://so9.vn/9downloader/insta"
             : "https://so9.vn/9downloader/douyin"
         });
-        if (!unlimited && items.size >= maxCount) break;
+        if (items.size >= maxCount) break;
       }
     };
 
@@ -1417,7 +1632,8 @@ function crawlPublicVideoLinksInPage(limit, minViews, platform) {
 
     const tick = () => {
       collect();
-      if ((!unlimited && items.size >= maxCount) || staleScrolls >= staleLimit) {
+      checkpoint();
+      if ((items.size >= maxCount) || staleScrolls >= staleLimit) {
         finish();
         return;
       }
@@ -1481,9 +1697,11 @@ function crawlPublicVideoLinksInPage(limit, minViews, platform) {
     const suffix = String(match[2] || "").toLowerCase();
     const multiplier = ["k", "n", "nghin", "ngan"].includes(suffix)
       ? 1000
-      : ["m", "tr", "trieu", "wan", "万"].includes(suffix)
+      : ["wan", "万"].includes(suffix) ? 10000
+        : ["yi", "亿"].includes(suffix) ? 100000000
+      : ["m", "tr", "trieu"].includes(suffix)
         ? 1000000
-        : ["b", "ty", "yi", "亿"].includes(suffix)
+        : ["b", "ty"].includes(suffix)
           ? 1000000000
           : 1;
     const views = Math.round(value * multiplier);
@@ -1680,7 +1898,9 @@ async function runQueue(folder, runId) {
       stage: "preparing",
       activeTabId: null,
       activeTabUrl: "",
-      activeDownloadIds: []
+      activeDownloadIds: [],
+      mediaKind: item.mediaKind || classifyMedia({ url: item.downloadUrl || item.link }) || "video",
+      downloadContext: null
     });
     await updateItem(item.id, { status: "running", message: "Đang chuẩn bị tải" });
     await appendLog(`Đang xử lý ${item.platform}: ${item.link}`, "info");
@@ -1692,7 +1912,7 @@ async function runQueue(folder, runId) {
         status: "success",
         message: result.filename ? `Đã tải: ${result.filename}` : "Đã hoàn tất"
       });
-      await rememberDownloaded(item.link, result.filename);
+      await rememberDownloaded(item, result.filename);
       await appendLog(`Thành công: ${item.link}`, "info");
     } catch (error) {
       if (stopped || currentJob.cancelRequested || currentJob.runId !== runId) {
@@ -1737,6 +1957,9 @@ async function advanceJob(nextIndex) {
 
 async function recoverActiveItem(item, downloadFolder, timeoutMs, runId) {
   if (currentJob.activeItemId !== item.id) return { handled: false };
+  const ownedTabId = currentJob.activeTabId;
+  const ownedTabUrl = currentJob.activeTabUrl;
+  try {
 
   const downloadId = currentJob.activeDownloadIds[0];
   if (Number.isInteger(downloadId)) {
@@ -1750,7 +1973,7 @@ async function recoverActiveItem(item, downloadFolder, timeoutMs, runId) {
         status: "success",
         message: result.filename ? `Đã tải: ${result.filename}` : "Đã hoàn tất"
       });
-      await rememberDownloaded(item.link, result.filename);
+      await rememberDownloaded(item, result.filename);
       await appendLog(`Đã phục hồi download thành công: ${item.link}`, "info");
       await untrackActiveDownload(downloadId);
       return { handled: true };
@@ -1766,14 +1989,15 @@ async function recoverActiveItem(item, downloadFolder, timeoutMs, runId) {
   }
 
   if (currentJob.stage === "waiting-fallback-download" || currentJob.stage === "waiting-telegram-download") {
-    const expectedHosts = currentJob.stage.includes("telegram")
+    const expectedHosts = currentJob.downloadContext?.expectedHosts || (currentJob.stage.includes("telegram")
       ? ["web.telegram.org", "telegram.org"]
-      : ["so9.vn"];
+      : [getHostname(currentJob.activeTabUrl)].filter(Boolean));
     const recentDownloads = await searchDownloads({ orderBy: ["-startTime"], limit: 50 });
     const candidate = recentDownloads.find((download) => matchesTriggeredDownload(download, {
       knownIds: new Set(),
-      startedAt: Math.max(currentJob.startedAt || 0, (currentJob.updatedAt || 0) - 5000),
-      expectedHosts
+      startedAt: currentJob.downloadContext?.triggeredAt || Math.max(currentJob.startedAt || 0, (currentJob.updatedAt || 0) - 5000),
+      expectedHosts,
+      expectedUrls: currentJob.downloadContext?.expectedUrls || []
     }));
     if (candidate) {
       await trackActiveDownload(candidate.id);
@@ -1788,7 +2012,7 @@ async function recoverActiveItem(item, downloadFolder, timeoutMs, runId) {
           status: "success",
           message: result.filename ? `Đã tải: ${result.filename}` : "Đã hoàn tất"
         });
-        await rememberDownloaded(item.link, result.filename);
+        await rememberDownloaded(item, result.filename);
         await appendLog(`Đã phục hồi download fallback: ${item.link}`, "info");
       } catch (error) {
         await updateItem(item.id, { status: "failed", message: formatDownloadError(error) });
@@ -1800,7 +2024,6 @@ async function recoverActiveItem(item, downloadFolder, timeoutMs, runId) {
     }
   }
 
-  await closeOwnedTab(currentJob.activeTabId, currentJob.activeTabUrl);
   await updateItem(item.id, { status: "pending", message: "Đã phục hồi sau khi worker khởi động lại" });
   await updateJobState({
     activeItemId: "",
@@ -1811,6 +2034,13 @@ async function recoverActiveItem(item, downloadFolder, timeoutMs, runId) {
     attempt: 0
   });
   return { handled: false };
+  } finally {
+    await closeOwnedTab(ownedTabId, ownedTabUrl);
+    if (currentJob.activeTabId === ownedTabId && ownedTabId !== null) {
+      activeTabId = null;
+      await updateJobState({ activeTabId: null, activeTabUrl: "" });
+    }
+  }
 }
 
 async function processItemWithRetry(item, downloadFolder, deadlineAt, runId) {
@@ -1834,7 +2064,7 @@ async function processItem(item, downloadFolder, deadlineAt, runId) {
   assertRunActive(runId);
   if (item.strategy === "direct-url") {
     await appendLog("Đang tải link video trực tiếp bằng Chrome API.", "info");
-    return await downloadDirectUrl(item.link, downloadFolder, "", deadlineAt, runId);
+    return await downloadDirectUrl(item.downloadUrl || item.link, downloadFolder, item.filename || "", deadlineAt, runId);
   }
 
   if (item.strategy === "direct-media") {
@@ -1913,7 +2143,8 @@ async function processSo9Item(item, downloadFolder, deadlineAt, runId, backendUr
         downloadFolder,
         timeoutMs: remainingMs(deadlineAt),
         runId,
-        expectedHosts: [site],
+        expectedHosts: [site, getHostname(prepared.directUrl)].filter(Boolean),
+        expectedUrls: prepared.directUrl && !prepared.isBlobUrl ? [prepared.directUrl] : [],
         triggerDownload: async () => {
           await sendContentMessageWithRetry(tab.id, { type: "CLICK_FINAL_DOWNLOAD" }, Math.min(15000, remainingMs(deadlineAt)));
         }
@@ -1938,13 +2169,15 @@ async function processDirectMediaPage(item, downloadFolder, deadlineAt, runId) {
     await updateJobState({ stage: "scanning-media-page" });
 
     if (storyPage) await prepareStoryVideoSurface(tab.id);
-    const { scan, candidate } = await waitForDirectMediaCandidate(tab.id, deadlineAt, runId, storyPage ? 20000 : 5000);
+    const { scan, candidate } = await waitForDirectMediaCandidate(tab.id, deadlineAt, runId, storyPage ? 20000 : 5000, item);
     if (!candidate) {
-      throw new Error(scan.blockedReason || "Không tìm thấy URL video trực tiếp. Trang có thể dùng blob, HLS/DASH, DRM, đăng nhập hoặc cơ chế không cho tải tự động.");
+      throw new Error(scan.candidates.length ? "MEDIA_SELECTION_REQUIRED: Có nhiều tài nguyên. Dùng Quét media / chọn file để chọn đúng mục." :
+        scan.blockedReason || "Không tìm thấy file media trực tiếp được phép tải.");
     }
 
     const qualityText = candidate.qualityLabel ? ` (${candidate.qualityLabel})` : "";
     await appendLog(`Đã tìm thấy video trực tiếp${qualityText}.`, "info");
+    await updateJobState({ mediaKind: candidate.kind || item.mediaKind || "video" });
     return await downloadDirectUrl(candidate.url, downloadFolder, candidate.filename, deadlineAt, runId);
   } finally {
     await closeTrackedTab(tab.id);
@@ -1964,14 +2197,17 @@ function isStoryPageItem(item) {
   }
 }
 
-async function waitForDirectMediaCandidate(tabId, deadlineAt, runId, maxWaitMs) {
+async function waitForDirectMediaCandidate(tabId, deadlineAt, runId, maxWaitMs, item = {}) {
   const pollDeadline = Math.min(deadlineAt, Date.now() + maxWaitMs);
   let scan = { candidates: [], blockedReason: "" };
 
   while (Date.now() < pollDeadline) {
     assertRunActive(runId);
     scan = await scanDirectMediaPage(tabId);
-    const candidate = chooseBestMediaCandidate(scan.candidates || []);
+    const candidate = chooseBestMediaCandidate(scan.candidates || [], {
+      ...item, mediaKind: item.mediaKind || (getHostname(item.link).includes("suno.") ? "audio" : "video"),
+      mediaId: item.mediaId || scan.mediaId || ""
+    });
     if (candidate) return { scan, candidate };
 
     const remaining = pollDeadline - Date.now();
@@ -2425,212 +2661,21 @@ function clickVisibleTelegramDownloadControl() {
 async function scanDirectMediaPage(tabId) {
   const [result] = await chrome.scripting.executeScript({
     target: { tabId },
-    func: collectDirectMediaCandidates
+    func: collectPageMedia
   });
   return result?.result || { candidates: [], blockedReason: "" };
 }
 
-function chooseBestMediaCandidate(candidates) {
-  return candidates
-    .filter((candidate) => candidate?.url && isDownloadableVideoCandidate(candidate))
-    .sort((a, b) => {
-      const qualityDiff = (b.quality || 0) - (a.quality || 0);
-      if (qualityDiff) return qualityDiff;
-      const mp4Diff = Number(/\.mp4(?:$|[?#])/i.test(b.url)) - Number(/\.mp4(?:$|[?#])/i.test(a.url));
-      if (mp4Diff) return mp4Diff;
-      return (b.score || 0) - (a.score || 0);
-    })[0] || null;
+function chooseBestMediaCandidate(candidates, request = {}) {
+  return selectMediaCandidate(candidates.filter(isDownloadableVideoCandidate), request);
 }
 
 function isDownloadableVideoCandidate(candidate) {
-  if (/^blob:|^data:/i.test(candidate.url)) return false;
-  if (/\.(m3u8|mpd)(?:$|[?#])/i.test(candidate.url)) return false;
-  return /\.(mp4|m4v|mov|webm)(?:$|[?#])/i.test(candidate.url) || /^video\//i.test(candidate.mime || "");
+  return Boolean(classifyMedia({ url: candidate.url, mime: candidate.mime, kindHint: candidate.kind }));
 }
 
 function collectDirectMediaCandidates() {
-  const directVideoPattern = /\.(mp4|m4v|mov|webm)(?:$|[?#])/i;
-  const streamPattern = /\.(m3u8|mpd)(?:$|[?#])/i;
-  const seen = new Set();
-  const candidates = [];
-  let sawBlob = false;
-  let sawStream = false;
-
-  function toAbsoluteUrl(raw) {
-    if (!raw) return "";
-    try {
-      return new URL(raw, location.href).href;
-    } catch (_) {
-      return "";
-    }
-  }
-
-  function getText(element) {
-    return [
-      element?.innerText,
-      element?.textContent,
-      element?.getAttribute?.("aria-label"),
-      element?.getAttribute?.("title"),
-      element?.getAttribute?.("download"),
-      element?.getAttribute?.("label"),
-      element?.dataset?.quality,
-      element?.dataset?.resolution
-    ].filter(Boolean).join(" ");
-  }
-
-  function inferQuality(url, label, width, height) {
-    const text = `${url} ${label || ""} ${width || ""}x${height || ""}`;
-    const values = [...text.matchAll(/\b(2160|1440|1080|720|576|480|360|240)p\b/gi)].map((match) => Number(match[1]));
-    const dimensionMatch = text.match(/\b\d{3,4}x(\d{3,4})\b/i);
-    if (dimensionMatch) values.push(Number(dimensionMatch[1]));
-    if (height) values.push(Number(height));
-    const quality = Math.max(0, ...values.filter(Number.isFinite));
-    return {
-      quality,
-      qualityLabel: quality ? `${quality}p` : ""
-    };
-  }
-
-  function inferFilename(url, label) {
-    try {
-      const parsed = new URL(url);
-      const raw = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || "");
-      if (/\.[a-z0-9]{2,6}$/i.test(raw)) return raw;
-    } catch (_) {
-      // Fall through to label-based fallback.
-    }
-
-    const safeLabel = String(label || "direct-media")
-      .trim()
-      .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
-      .replace(/\s+/g, " ")
-      .slice(0, 80);
-    return `${safeLabel || "direct-media"}.mp4`;
-  }
-
-  function looksLikeDirectVideo(url, mime) {
-    if (!url || /^data:/i.test(url)) return false;
-    if (/^blob:/i.test(url)) {
-      sawBlob = true;
-      return false;
-    }
-    if (streamPattern.test(url)) {
-      sawStream = true;
-      return false;
-    }
-    return directVideoPattern.test(url) || /^video\//i.test(mime || "");
-  }
-
-  function addCandidate(rawUrl, meta = {}) {
-    const url = toAbsoluteUrl(rawUrl);
-    if (!looksLikeDirectVideo(url, meta.mime)) return;
-    if (seen.has(url)) return;
-    seen.add(url);
-
-    const label = meta.label || "";
-    const quality = inferQuality(url, label, meta.width, meta.height);
-    candidates.push({
-      url,
-      filename: meta.filename || inferFilename(url, label),
-      quality: quality.quality,
-      qualityLabel: quality.qualityLabel,
-      mime: meta.mime || "",
-      source: meta.source || "page",
-      score: (quality.quality || 0) + (directVideoPattern.test(url) ? 100 : 40)
-    });
-  }
-
-  for (const video of document.querySelectorAll("video")) {
-    addCandidate(video.currentSrc || video.src, {
-      label: getText(video),
-      mime: video.type || "",
-      width: video.videoWidth || video.getAttribute("width"),
-      height: video.videoHeight || video.getAttribute("height"),
-      source: "video"
-    });
-
-    for (const source of video.querySelectorAll("source[src]")) {
-      addCandidate(source.src, {
-        label: getText(source) || getText(video),
-        mime: source.type || "",
-        width: video.videoWidth || source.getAttribute("width"),
-        height: video.videoHeight || source.getAttribute("height"),
-        source: "source"
-      });
-    }
-  }
-
-  for (const source of document.querySelectorAll("source[src]")) {
-    addCandidate(source.src, {
-      label: getText(source),
-      mime: source.type || "",
-      source: "source"
-    });
-  }
-
-  for (const anchor of document.querySelectorAll("a[href]")) {
-    addCandidate(anchor.href, {
-      label: getText(anchor),
-      filename: anchor.getAttribute("download") || "",
-      source: "anchor"
-    });
-  }
-
-  const dataAttributes = ["src", "href", "video", "url", "file", "media"];
-  for (const element of document.querySelectorAll("[data-src], [data-href], [data-video], [data-url], [data-file], [data-media]")) {
-    for (const name of dataAttributes) {
-      addCandidate(element.dataset?.[name], {
-        label: getText(element),
-        source: `data-${name}`
-      });
-    }
-  }
-
-  // JSON nhúng trong <script> của Facebook (browser_native_hd_url), TikTok (playAddr), Instagram (video_url).
-  // ponytail: lấy theo thứ tự xuất hiện; trang video đơn thường đặt video chính trước tiên.
-  const scriptText = [...document.scripts].map((script) => script.textContent || "").join("\n");
-  const jsonKeyPattern = /"(browser_native_hd_url|browser_native_sd_url|playAddr|video_url)"\s*:\s*"(https?:[^"]+)"/g;
-  const keyQuality = { browser_native_hd_url: "1080p", browser_native_sd_url: "480p", playAddr: "720p", video_url: "720p" };
-  const pageTitle = (document.title || "video").replace(/\s*[|\-\u2013]\s*(Facebook|TikTok|Instagram|Douyin|YouTube|Bilibili|哔哩哔哩).*$/i, "").slice(0, 80);
-  for (const match of scriptText.matchAll(/"itag"\s*:\s*(18|22)\s*,[^{}]*?"url"\s*:\s*"(https:[^"]+googlevideo\.com[^"]+)"/g)) {
-    addCandidate(match[2].replace(/\\u0026/g, "&"), {
-      label: `${pageTitle} ${match[1] === "22" ? "720p" : "360p"}`,
-      filename: `${pageTitle}.mp4`,
-      mime: "video/mp4",
-      source: "script-youtube"
-    });
-  }
-  for (const match of scriptText.matchAll(jsonKeyPattern)) {
-    const url = match[2].replace(/\\u0026/g, "&").replace(/\\\//g, "/").replace(/\\"/g, '"');
-    addCandidate(url, {
-      label: `${pageTitle} ${keyQuality[match[1]]}`,
-      filename: `${pageTitle}.mp4`,
-      mime: "video/mp4",
-      source: `script-${match[1]}`
-    });
-  }
-
-  for (const entry of performance.getEntriesByType("resource")) {
-    addCandidate(entry.name, {
-      label: entry.name,
-      source: "performance"
-    });
-    if (streamPattern.test(entry.name)) sawStream = true;
-    if (/^blob:/i.test(entry.name)) sawBlob = true;
-  }
-
-  let blockedReason = "";
-  if (!candidates.length && sawStream) {
-    blockedReason = "Trang chỉ expose HLS/DASH playlist; bản này không ghép stream thành video.";
-  } else if (!candidates.length && sawBlob) {
-    blockedReason = "Trang dùng blob stream; không có URL file video trực tiếp để Chrome tải.";
-  }
-
-  return {
-    candidates,
-    blockedReason,
-    title: document.title || ""
-  };
+  return collectPageMedia();
 }
 
 async function sendContentMessageWithRetry(tabId, message, timeoutMs) {
@@ -2681,9 +2726,14 @@ function sendContentMessage(tabId, message, timeoutMs) {
 
 async function downloadDirectUrl(url, downloadFolder, suggestedName, deadlineAt, runId) {
   const parsedUrl = parseHttpUrl(url);
+  if (!classifyMedia({ url, kindHint: currentJob.mediaKind || "video" })) {
+    throw new Error("DOWNLOAD_MISMATCH: URL không phải file media trực tiếp.");
+  }
   assertRunActive(runId);
   const filename = buildDownloadFilename(downloadFolder, suggestedName, url);
-  await updateJobState({ stage: "starting-direct-download" });
+  await updateJobState({ stage: "starting-direct-download", downloadContext: {
+    expectedUrls: [url], expectedHosts: [parsedUrl.hostname], triggeredAt: Date.now(), mediaKind: currentJob.mediaKind
+  } });
   const id = await chromeDownload({
     url: parsedUrl.href,
     filename,
@@ -2704,9 +2754,10 @@ async function downloadDirectUrl(url, downloadFolder, suggestedName, deadlineAt,
   }
 }
 
-async function waitForDownloadTriggered({ downloadFolder, timeoutMs, triggerDownload, runId, expectedHosts = [] }) {
+async function waitForDownloadTriggered({ downloadFolder, timeoutMs, triggerDownload, runId, expectedHosts = [], expectedUrls = [] }) {
   assertRunActive(runId);
   const knownIds = new Set((await searchDownloads({ state: "in_progress" })).map((item) => item.id));
+  await updateJobState({ downloadContext: { expectedHosts, expectedUrls, triggeredAt: Date.now(), mediaKind: currentJob.mediaKind } });
 
   return new Promise((resolve, reject) => {
     const startedAt = Date.now();
@@ -2745,7 +2796,7 @@ async function waitForDownloadTriggered({ downloadFolder, timeoutMs, triggerDown
 
     function claimDownload(downloadItem) {
       if (watchedId) return downloadItem.id === watchedId;
-      if (!matchesTriggeredDownload(downloadItem, { knownIds, startedAt, expectedHosts })) return false;
+      if (!matchesTriggeredDownload(downloadItem, { knownIds, startedAt, expectedHosts, expectedUrls })) return false;
       watchedId = downloadItem.id;
       activeDownloadIds.add(downloadItem.id);
       trackingPromise = trackActiveDownload(downloadItem.id);
@@ -2763,7 +2814,9 @@ async function waitForDownloadTriggered({ downloadFolder, timeoutMs, triggerDown
 
     function onCreated(downloadItem) {
       if (Date.now() - startedAt > timeoutMs) return;
-      claimDownload(downloadItem);
+      if (claimDownload(downloadItem) && downloadItem.state === "complete") {
+        onChanged({ id: downloadItem.id, state: { current: "complete" } });
+      }
     }
 
     function onChanged(delta) {
@@ -2878,47 +2931,21 @@ function waitForDownloadId(downloadId, timeoutMs, runId) {
   });
 }
 
-function matchesTriggeredDownload(downloadItem, { knownIds, startedAt, expectedHosts }) {
+function matchesTriggeredDownload(downloadItem, { knownIds = new Set(), startedAt = 0, expectedHosts = [], expectedUrls = [] }) {
   if (!downloadItem || knownIds.has(downloadItem.id)) return false;
   const started = Date.parse(downloadItem.startTime || "");
   if (Number.isFinite(started) && started < startedAt - 1500) return false;
-  if (downloadItem.byExtensionId && downloadItem.byExtensionId !== chrome.runtime.id) return false;
-  if (downloadItem.byExtensionId === chrome.runtime.id) return true;
-
-  const hosts = [downloadItem.referrer, downloadItem.url, downloadItem.finalUrl]
-    .map(getHostname)
-    .filter(Boolean);
-  return expectedHosts.some((expected) => hosts.some((host) => host === expected || host.endsWith(`.${expected}`)));
+  return matchesDownloadSource(downloadItem, {
+    allowedHosts: expectedHosts, expectedUrls, extensionId: chrome.runtime.id,
+    expectedKind: currentJob.mediaKind || "video"
+  });
 }
 
-function validateDownloadedItem(item) {
-  if (!item) throw new Error("DOWNLOAD_NOT_FOUND: Chrome không trả về thông tin file tải.");
-  if (item.state === "interrupted") {
-    throw new Error(`Chrome báo lỗi tải file: ${item.error || "interrupted"}`);
-  }
-
-  const mime = String(item.mime || "").toLowerCase();
-  const filename = String(item.filename || "");
-  if (mime.startsWith("text/html") || mime.startsWith("image/")) {
-    throw new Error(`DOWNLOAD_MISMATCH: Máy chủ trả về ${mime || "nội dung không phải video"}.`);
-  }
-  if (/\.(html?|xhtml|jpe?g|png|gif|webp|svg)(?:$|[?#])/i.test(filename)) {
-    throw new Error("DOWNLOAD_MISMATCH: File tải về không phải định dạng video.");
-  }
-  if (item.totalBytes === 0 || item.fileSize === 0) {
-    throw new Error("DOWNLOAD_EMPTY: File tải về rỗng.");
-  }
-  if (item.danger && !["safe", "accepted", "allowlistedByPolicy"].includes(item.danger)) {
-    throw new Error(`DOWNLOAD_DANGER: Chrome đánh dấu file ở trạng thái ${item.danger}.`);
-  }
-
-  return {
-    id: item.id,
-    filename,
-    mime,
-    totalBytes: item.totalBytes,
-    finalUrl: item.finalUrl || item.url || ""
-  };
+function validateDownloadedItem(item, expectedKind = currentJob.mediaKind || "video") {
+  const validation = validateMediaDownload(item, { expectedKind });
+  if (!validation.ok) throw new Error(validation.reason + ": File tải không đúng loại media, rỗng hoặc bị Chrome chặn.");
+  return { id: item.id, filename: item.filename, mime: item.mime || "", totalBytes: item.totalBytes,
+    finalUrl: item.finalUrl || item.url || "", mediaKind: validation.kind };
 }
 
 function searchDownloads(query) {
@@ -3170,6 +3197,7 @@ async function publishState() {
     lastCrawlSource: data.lastCrawlSource || "",
     lastCrawlTime: data.lastCrawlTime || 0,
     running: runLock,
+    crawling: crawlLock,
     paused
   };
   chrome.runtime.sendMessage({ type: "STATE_UPDATED", state }).catch(() => {});
@@ -3208,22 +3236,16 @@ function cancelDownload(id) {
   });
 }
 
-function buildDownloadFilename(downloadFolder, suggestedName, url) {
-  const fallbackName = (() => {
-    try {
-      const parsed = new URL(url);
-      return decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || "");
-    } catch (_) {
-      return "";
-    }
-  })();
-
-  let filename = sanitizeFilename(suggestedName || fallbackName || `so9-${Date.now()}.mp4`);
-  if (/\.(?:html?|xhtml|jpe?g|png|gif|webp|svg)$/i.test(filename)) {
-    filename = filename.replace(/\.[^.]+$/i, "");
+function buildDownloadFilename(downloadFolder, suggestedName, url, mediaKind = currentJob.mediaKind || "video") {
+  const extension = getMediaExtension({ url, kindHint: mediaKind }) || ({video:"mp4",audio:"mp3",image:"jpg",subtitle:"vtt"}[mediaKind]);
+  let name = suggestedName;
+  if (!name) {
+    try { name = decodeURIComponent(new URL(url).pathname.split("/").pop() || ""); } catch {}
   }
-  if (!/\.[a-z0-9]{2,6}$/i.test(filename)) filename += ".mp4";
-  return `${downloadFolder}/${filename}`;
+  name = sanitizeFilename(name || "media-" + Date.now());
+  const detected = classifyMedia({ url: "https://file.invalid/" + name });
+  if (detected !== mediaKind) name = name.replace(/\.[^.]+$/, "") + "." + extension;
+  return sanitizeFolder(downloadFolder) + "/" + name;
 }
 
 function getBaseName(value) {

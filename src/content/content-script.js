@@ -243,10 +243,10 @@ function isDirectMediaUrl(href) {
     const url = new URL(href, location.href);
     const pathname = url.pathname.toLowerCase();
     const hostname = url.hostname.toLowerCase();
+    if (!["https:", "http:"].includes(url.protocol) || /\.(m3u8|mpd|m4s|ts)(?:$|[?#])/i.test(url.href)) return false;
     return /\.(mp4|mov|webm|m4v|mkv)(\?|$)/i.test(pathname) ||
-      (hostname.endsWith("googlevideo.com") && pathname === "/videoplayback") ||
-      hostname.endsWith("bilivideo.com") ||
-      (hostname.includes("cdn") && /\/(video|videos|media|downloader|download)\//i.test(pathname));
+      ((hostname === "googlevideo.com" || hostname.endsWith(".googlevideo.com")) && pathname === "/videoplayback") ||
+      (hostname === "bilivideo.com" || hostname.endsWith(".bilivideo.com"));
   } catch (_) {
     return false;
   }

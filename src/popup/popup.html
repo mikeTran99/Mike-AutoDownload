@@ -10,9 +10,9 @@
     <main class="app-shell">
       <section class="hero">
         <div>
-          <p class="eyebrow">Video Batch Downloader</p>
+          <p class="eyebrow">Media Batch Downloader</p>
           <h1>Mike-Autodownload</h1>
-          <small>Tải video hàng loạt, quét kênh và tải link trực tiếp</small>
+          <small>Tải video, audio, ảnh và phụ đề trực tiếp; quét kênh và chọn file trước khi tải</small>
         </div>
         <div class="hero-tools">
           <div class="hero-buttons">
@@ -39,7 +39,7 @@
           <div class="field-row count-field">
             <label for="maxReels">Số lượng</label>
             <input id="maxReels" type="number" min="1" step="1" inputmode="numeric" placeholder="Toàn bộ" aria-describedby="maxReelsHelp">
-            <small id="maxReelsHelp">Số nguyên dương, hoặc để trống để lấy toàn bộ.</small>
+            <small id="maxReelsHelp">Số nguyên dương; để trống quét tối đa 5.000 mục mỗi lượt.</small>
           </div>
           <div class="field-row min-view-field">
             <label for="minViews">View tối thiểu</label>
@@ -77,6 +77,8 @@
           <div class="manual-links">
             <textarea id="manualLinks" placeholder="Dán link vào đây, mỗi dòng một link"></textarea>
             <button id="importTextBtn" class="secondary" type="button">Nạp link</button>
+            <button id="scanMediaBtn" type="button">Quét media / chọn file</button>
+            <small>Dán một link trang HTTPS để chọn video, audio, ảnh hoặc phụ đề mà trang cung cấp.</small>
           </div>
         </div>
 
@@ -141,6 +143,10 @@
         <button id="queueMoreBtn" class="ghost queue-more" type="button" hidden>Xem thêm</button>
       </section>
 
+      <section class="panel history-panel">
+        <div class="section-title"><h2>Lịch sử tải</h2></div>
+        <div id="historyList" class="history-list" aria-live="polite"></div>
+      </section>
       <section class="panel log-panel">
         <div class="section-title">
           <h2>Log trạng thái</h2>
@@ -155,6 +161,15 @@
         <div id="logList" class="log-list" role="log" aria-live="polite"></div>
       </section>
     </main>
+    <dialog id="mediaDialog" class="media-dialog" aria-labelledby="mediaTitle">
+      <h2 id="mediaTitle">Chọn media để tải</h2>
+      <p id="mediaStatus" role="status"></p>
+      <div id="mediaChoices" class="media-choices"></div>
+      <div class="actions">
+        <button id="mediaAddBtn" class="primary" type="button">Thêm mục đã chọn</button>
+        <button id="mediaCloseBtn" type="button">Đóng</button>
+      </div>
+    </dialog>
     <dialog id="contactDialog" class="contact-dialog">
       <div class="contact-card">
         <div class="contact-profile">

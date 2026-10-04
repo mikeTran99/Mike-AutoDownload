@@ -1,5 +1,7 @@
 # Kế hoạch cải tiến Mike-Autodownload → v2.0.0 (public release)
 
+> Ghi chú 04/10/2026: tài liệu này giữ lại lịch sử kế hoạch tháng 09. Một số trạng thái hoàn thành và nhận định về repo mẫu chưa khớp implementation đã kiểm tra. Xem [báo cáo rà soát và kế hoạch nâng cấp hiện tại](AUDIT_AND_UPGRADE_PLAN_2026-10-04.md) cùng `tools/audit-current-runtime.mjs` để dùng baseline và bằng chứng mới.
+
 Ngày lập: 2026-09-11. Baseline: commit `0d75983` (v1.2.1) — trùng 100% với repo GitHub `mikeTran99/Mike-AutoDownload`.
 
 ## 1. So sánh ba bản

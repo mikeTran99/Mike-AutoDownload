@@ -7,20 +7,17 @@ import {
   extractFunction,
   fromRoot,
   readManifest,
-  readProjectFile, resolveProjectFile } from "./helpers/project.mjs";
+  readProjectFile } from "./helpers/project.mjs";
+import { runtime } from "./helpers/runtime.mjs";
 
 const RUNTIME_FILES = ["popup.js", "service-worker.js", "content-script.js", "options.js"];
 const EXPECTED_BRAND = "Mike-Autodownload";
 
-test("all extension JavaScript passes the Node syntax parser", () => {
-  for (const relativePath of RUNTIME_FILES) {
-    assert.doesNotThrow(() => {
-      execFileSync(process.execPath, ["--check", resolveProjectFile(relativePath)], {
-        encoding: "utf8",
-        stdio: "pipe"
-      });
-    }, `${relativePath} has invalid JavaScript syntax`);
-  }
+test("all extension JavaScript passes the explicit module and classic syntax checker", () => {
+  execFileSync(process.execPath, [fromRoot("tools/check-syntax.mjs")], {
+    encoding: "utf8",
+    stdio: "pipe"
+  });
 });
 
 test("MV3 job state is persisted and has restart recovery hooks", async () => {
@@ -77,30 +74,26 @@ test("SO9 path prefers a direct URL and arms fallback listeners before clicking"
   ], "SO9 fallback listener setup");
 });
 
-test("fallback downloads are correlated before they can be claimed or renamed", async () => {
-  const worker = await readProjectFile("service-worker.js");
-  const fallbackWatcher = extractFunction(worker, "waitForDownloadTriggered");
-  const matcher = extractFunction(worker, "matchesTriggeredDownload");
-  const validator = extractFunction(worker, "validateDownloadedItem");
-  const filenameListener = extractFunction(fallbackWatcher, "onDeterminingFilename");
-
-  assertAppearsInOrder(fallbackWatcher, [
-    "searchDownloads({ state: \"in_progress\" })",
-    "matchesTriggeredDownload(",
-    "onDeterminingFilename.addListener"
-  ], "fallback download correlation");
-  assertAppearsInOrder(filenameListener, [
-    "!claimDownload(downloadItem)",
-    "suggest()",
-    "return"
-  ], "unrelated download filename handling");
-  assert.match(matcher, /knownIds\.has\(downloadItem\.id\)/);
-  assert.match(matcher, /downloadItem\.startTime/);
-  assert.match(matcher, /downloadItem\.byExtensionId/);
-  assert.match(matcher, /expectedHosts\.some/);
-  assert.match(validator, /mime\.startsWith\(["']text\/html["']\)/);
-  assert.match(validator, /mime\.startsWith\(["']image\/["']\)/);
-  assert.match(validator, /totalBytes\s*===\s*0/);
+test("fallback correlation rejects preexisting, stale, foreign, and unrelated downloads", async () => {
+  const c = await runtime();
+  const startedAt = Date.now();
+  c.sandbox.fixtureOptions = { knownIds: new Set([5]), startedAt, expectedHosts: ["snaptik.app"] };
+  const download = {
+    id: 7, startTime: new Date(startedAt).toISOString(), byExtensionId: "fixture",
+    state: "complete", filename: "clip.mp4", mime: "video/mp4", fileSize: 100, totalBytes: 100,
+    url: "https://snaptik.app/download/clip.mp4", finalUrl: "https://snaptik.app/download/clip.mp4"
+  };
+  for (const [patch, expected] of [
+    [{}, true],
+    [{ id: 5 }, false],
+    [{ startTime: new Date(startedAt - 60000).toISOString() }, false],
+    [{ byExtensionId: "different-extension" }, false],
+    [{ url: "https://snaptik.app.evil/clip.mp4", finalUrl: "https://snaptik.app.evil/clip.mp4", referrer: "https://snaptik.app/" }, false],
+    [{ filename: "log.txt", mime: "text/plain", url: "blob:chrome-extension://fixture/export", finalUrl: "blob:chrome-extension://fixture/export" }, false]
+  ]) {
+    c.sandbox.fixtureDownload = { ...download, ...patch };
+    assert.equal(c.evaluate("matchesTriggeredDownload(fixtureDownload, fixtureOptions)"), expected, JSON.stringify(patch));
+  }
 });
 
 test("timeouts and stop requests cancel tracked Chrome downloads", async () => {

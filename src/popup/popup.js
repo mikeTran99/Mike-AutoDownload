@@ -1,5 +1,6 @@
 import { t, initLang, setLang, getLang, applyDom } from "../shared/i18n.js";
 import { formatCompact, sparklineSvg, VIRAL_MULTIPLIER, channelFolderName, formatBytes } from "../shared/analytics.js";
+import { classifyMedia, canonicalMediaKey } from "../shared/media-policy.js";
 
 const ROUTES = [
   { platform: "facebook", strategy: "so9", hosts: ["facebook.com", "fb.watch"], url: "https://so9.vn/9downloader/facebook" },
@@ -41,6 +42,15 @@ const state = {
   crawling: false
 };
 
+let pendingLogs = [];
+let previewScan = null;
+
+function historyRecordFor(value) {
+  const item = typeof value === "string" ? { link: value } : value || {};
+  const key = canonicalMediaKey(item);
+  return state.downloadHistory[key] || (item.link ? state.downloadHistory[item.link] : null) || null;
+}
+
 const els = {
   channelUrl: document.getElementById("channelUrl"),
   maxReels: document.getElementById("maxReels"),
@@ -52,6 +62,13 @@ const els = {
   file: document.getElementById("linkFile"),
   manualLinks: document.getElementById("manualLinks"),
   importText: document.getElementById("importTextBtn"),
+  scanMedia: document.getElementById("scanMediaBtn"),
+  mediaDialog: document.getElementById("mediaDialog"),
+  mediaChoices: document.getElementById("mediaChoices"),
+  mediaStatus: document.getElementById("mediaStatus"),
+  mediaAdd: document.getElementById("mediaAddBtn"),
+  mediaClose: document.getElementById("mediaCloseBtn"),
+  historyList: document.getElementById("historyList"),
   folder: document.getElementById("downloadFolder"),
   start: document.getElementById("startBtn"),
   pause: document.getElementById("pauseBtn"),
@@ -98,6 +115,7 @@ function init() {
     "queue",
     "logs",
     "runState",
+    "crawlJob",
     "theme",
     "savedReelLinks",
     "savedReelItems",
@@ -127,6 +145,7 @@ function init() {
     state.lastCrawlTime = data.lastCrawlTime || 0;
     state.running = data.runState?.running || false;
     state.paused = data.runState?.paused || false;
+    state.crawling = data.crawlJob?.status === "running";
     if (data.theme === "light") document.documentElement.classList.add("light-theme");
     scheduleRender();
   });
@@ -147,6 +166,7 @@ function init() {
     if (changes.savedReelItems) state.savedReelItems = changes.savedReelItems.newValue || [];
     if (changes.channelStats) state.channelStats = changes.channelStats.newValue || {};
     if (changes.downloadHistory) state.downloadHistory = changes.downloadHistory.newValue || {};
+    if (changes.crawlJob) state.crawling = changes.crawlJob.newValue?.status === "running";
     if (changes.lastCrawlSource) state.lastCrawlSource = changes.lastCrawlSource.newValue || "";
     if (changes.lastCrawlTime) state.lastCrawlTime = changes.lastCrawlTime.newValue || 0;
     if (changes.runState) {
@@ -156,8 +176,11 @@ function init() {
     scheduleRender();
   });
 
-  els.file.addEventListener("change", handleFileUpload);
-  els.importText.addEventListener("click", handleManualImport);
+  els.file.addEventListener("change", (event) => handleFileUpload(event).catch(showUiError));
+  els.importText.addEventListener("click", () => handleManualImport().catch(showUiError));
+  els.scanMedia.addEventListener("click", scanMediaPreview);
+  els.mediaClose.addEventListener("click", () => els.mediaDialog.close());
+  els.mediaAdd.addEventListener("click", addSelectedMedia);
   els.crawl.addEventListener("click", crawlChannelVideos);
   els.maxReels.addEventListener("input", () => els.maxReels.setCustomValidity(""));
   els.loadSaved.addEventListener("click", loadSavedReelsToQueue);
@@ -213,8 +236,25 @@ function init() {
   els.queue.addEventListener("click", (event) => {
     const button = event.target.closest("button.remove");
     if (button) removeQueueItem(button.dataset.id);
+    const retry = event.target.closest("button.retry");
+    if (retry) queueCommand({ type: "QUEUE_RETRY", id: retry.dataset.id }).then(render).catch(showUiError);
   });
   els.contact.addEventListener("click", () => els.contactDialog.showModal());
+  els.historyList.addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-history-key]");
+    if (!button) return;
+    const record = state.downloadHistory[button.dataset.historyKey];
+    const queued = state.queue.find((item) => canonicalMediaKey(item) === button.dataset.historyKey);
+    try {
+      if (queued) await queueCommand({ type: "QUEUE_RETRY", id: queued.id });
+      else {
+        els.manualLinks.value = record?.link || button.dataset.historyKey;
+        addLog("Link gốc đã được điền. Quét media / chọn file để lấy URL mới hoặc Nạp link để tải lại.", "info");
+        await persist();
+      }
+      render();
+    } catch (error) { showUiError(error); }
+  });
   els.contactClose.addEventListener("click", () => els.contactDialog.close());
   els.contactDialog.addEventListener("click", (event) => {
     if (event.target === els.contactDialog) els.contactDialog.close();
@@ -233,36 +273,17 @@ function init() {
 }
 
 async function clearAllData() {
-  if (state.running || state.crawling) {
-    addLog("Không thể xóa dữ liệu khi đang chạy.", "warn");
+  if (state.running || state.crawling) return;
+  if (!confirm(t("Xóa toàn bộ queue, lịch sử và dữ liệu quét đã lưu?"))) return;
+  try {
+    await queueCommand({ type: "CLEAR_LOCAL_DATA" });
+    pendingLogs = [];
+    state.logs = []; state.savedReelLinks = []; state.savedReelItems = [];
+    state.downloadHistory = {}; state.channelStats = {};
+    state.lastCrawlSource = ""; state.lastCrawlTime = 0;
+    els.channelUrl.value = ""; els.maxReels.value = ""; els.minViews.value = "";
     render();
-    return;
-  }
-  if (!confirm(t("Bạn có chắc chắn muốn xóa toàn bộ dữ liệu cũ (link đã lưu, danh sách tải, log, thông tin quét kênh)?"))) return;
-  
-  state.queue = [];
-  state.logs = [];
-  state.savedReelLinks = [];
-  state.savedReelItems = [];
-  state.lastCrawlSource = "";
-  state.lastCrawlTime = 0;
-  els.channelUrl.value = "";
-  els.maxReels.value = "";
-  els.minViews.value = "";
-  
-  await chrome.storage.local.remove([
-    "queue", 
-    "logs", 
-    "savedReelLinks", 
-    "savedReelItems", 
-    "lastCrawlSource", 
-    "lastCrawlTime", 
-    "lastCrawlMax", 
-    "lastMinViews"
-  ]);
-  
-  await persist();
-  render();
+  } catch (error) { showUiError(error); }
 }
 
 async function toggleLang() {
@@ -280,9 +301,10 @@ async function handleFileUpload(event) {
   if (state.running) return;
   const file = event.target.files?.[0];
   if (!file) return;
+  if (file.size > 8 * 1024 * 1024) throw new Error("File link vượt 8 MB. Hãy chia nhỏ trước khi nạp.");
 
   const text = await file.text();
-  const added = appendToQueue(buildQueueFromText(text));
+  const added = await appendToQueue(buildQueueFromText(text));
 
   addLog(`Đã nạp ${added.added} link từ file ${file.name}, bỏ qua ${added.duplicates} link trùng`, "info");
   event.target.value = "";
@@ -291,36 +313,106 @@ async function handleFileUpload(event) {
 }
 
 // Nạp thêm vào hàng đợi hiện có, bỏ link đã có (kể cả đã tải xong) để chạy lô lớn nhiều đợt không trùng.
-function appendToQueue(items) {
-  const known = new Set(state.queue.map((item) => item.link));
-  let added = 0;
-  let duplicates = 0;
-  for (const item of items) {
-    if (known.has(item.link)) {
-      duplicates += 1;
-      continue;
-    }
-    known.add(item.link);
-    state.queue.push(item);
-    added += 1;
+async function queueCommand(message) {
+  const response = await chrome.runtime.sendMessage(message);
+  if (!response?.ok) throw new Error(response?.error || "Không thể cập nhật danh sách.");
+  if (response.queue) state.queue = response.queue;
+  return response;
+}
+
+function showUiError(error) {
+  addLog(error.message || String(error), "error");
+  persist().catch(console.error);
+  render();
+}
+
+async function appendToQueue(items) {
+  return await queueCommand({ type: "QUEUE_APPEND", items });
+}
+
+async function scanMediaPreview() {
+  if (state.running || state.crawling) return;
+  const links = extractLinks(els.manualLinks.value);
+  if (links.length !== 1) {
+    showUiError(new Error("Dán đúng một link trang vào ô nhập để quét và chọn media."));
+    return;
   }
-  return { added, duplicates };
+  const route = detectRoute(links[0]);
+  if (!route || route.status === "unsupported" || route.strategy === "telegram-private" || route.strategy === "direct-url") {
+    showUiError(new Error("Quét media dùng cho trang HTTPS có media. File trực tiếp dùng Nạp link; Telegram dùng luồng tải hiện có."));
+    return;
+  }
+  const origin = new URL(links[0]).origin + "/*";
+  try {
+    // Keep permission requests inside the click handler for Chrome's user gesture.
+    if (!await chrome.permissions.request({ origins: [origin] })) throw new Error("Chrome chưa cấp quyền đọc trang.");
+    state.crawling = true;
+    render();
+    const response = await chrome.runtime.sendMessage({ type: "SCAN_MEDIA_PAGE", link: links[0] });
+    if (!response?.ok) throw new Error(response?.error || "Không thể quét trang.");
+    previewScan = response.scan;
+    const candidates = previewScan.candidates || [];
+    els.mediaStatus.textContent = candidates.length
+      ? candidates.length + " tài nguyên. Chọn file cần tải; chất lượng giữ nguyên bản gốc."
+      : previewScan.blockedReason || "Không tìm thấy media.";
+    els.mediaChoices.innerHTML = candidates.map((candidate, index) =>
+      '<label class="media-choice"><input type="checkbox" data-index="' + index + '">' +
+      '<span><strong>' + escapeHtml(candidate.filename || candidate.label || "media") + '</strong>' +
+      '<small>' + escapeHtml([candidate.kind, candidate.qualityLabel, new URL(candidate.url).hostname, candidate.source].filter(Boolean).join(" · ")) +
+      '</small></span></label>').join("");
+    els.mediaAdd.disabled = !candidates.length;
+    els.mediaDialog.showModal();
+  } catch (error) { showUiError(error); }
+  finally { state.crawling = false; render(); }
+}
+
+async function addSelectedMedia() {
+  if (!previewScan || state.running || state.crawling) return;
+  const selected = [...els.mediaChoices.querySelectorAll("input:checked")].map((input) => {
+    const candidate = previewScan.candidates[Number(input.dataset.index)];
+    const assetUrl = new URL(candidate.url);
+    // Asset identity excludes expiring authorization; signed download URL stays intact.
+    const identity = new URL(assetUrl.origin + assetUrl.pathname);
+    for (const key of ["id", "itag", "file", "name", "resource"]) {
+      if (assetUrl.searchParams.has(key)) identity.searchParams.set(key, assetUrl.searchParams.get(key));
+    }
+    return { id: crypto.randomUUID(), link: previewScan.sourceUrl, sourceUrl: previewScan.sourceUrl,
+      downloadUrl: candidate.url, mediaKind: candidate.kind, assetId: identity.href, variant: candidate.qualityLabel || "original",
+      mediaId: candidate.mediaId, filename: candidate.filename, platform: new URL(previewScan.sourceUrl).hostname,
+      strategy: "direct-url", status: "pending", message: "Đã chọn file gốc: " + candidate.kind };
+  });
+  if (!selected.length) { els.mediaStatus.textContent = "Chọn ít nhất một file."; return; }
+  try {
+    const result = await appendToQueue(selected);
+    addLog("Đã thêm " + result.added + " tài nguyên, bỏ qua " + result.skipped + " mục trùng/đã tải/vượt giới hạn.", "info");
+    await persist();
+    els.mediaDialog.close();
+    render();
+  } catch (error) { showUiError(error); }
+}
+
+function renderHistory() {
+  const records = Object.entries(state.downloadHistory).sort((a,b) => b[1].time - a[1].time).slice(0, 100);
+  els.historyList.innerHTML = records.length ? records.map(([key, item]) =>
+    '<article class="history-row"><strong>' + escapeHtml(item.filename || item.link || key) + '</strong><small>' +
+    escapeHtml(new Date(item.time).toLocaleString()) + ' · ' + escapeHtml(item.mediaKind || "video") +
+    '</small><button type="button" data-history-key="' + escapeHtml(key) + '"' +
+    (state.running || state.crawling ? ' disabled' : '') + '>Tải lại / chọn lại</button></article>').join("")
+    : '<small>Chưa có file tải thành công. Hiển thị tối đa 100 mục gần nhất.</small>';
 }
 
 async function removeQueueItem(id) {
-  if (state.running) return;
-  state.queue = state.queue.filter((item) => item.id !== id);
-  await persist();
-  render();
+  try {
+    await queueCommand({ type: "QUEUE_REMOVE", id });
+    render();
+  } catch (error) { showUiError(error); }
 }
 
 async function pruneQueue() {
-  if (state.running || state.crawling) return;
-  const before = state.queue.length;
-  state.queue = state.queue.filter((item) => !["success", "unsupported", "skipped"].includes(item.status));
-  addLog(`Đã dọn ${before - state.queue.length} link đã xong/không hỗ trợ khỏi hàng đợi.`, "info");
-  await persist();
-  render();
+  try {
+    await queueCommand({ type: "QUEUE_PRUNE" });
+    render();
+  } catch (error) { showUiError(error); }
 }
 
 async function handleManualImport() {
@@ -333,7 +425,7 @@ async function handleManualImport() {
     return;
   }
 
-  const added = appendToQueue(buildQueueFromText(text));
+  const added = await appendToQueue(buildQueueFromText(text));
   addLog(`Đã nạp ${added.added} link từ ô nhập tay, bỏ qua ${added.duplicates} link trùng`, "info");
   els.manualLinks.value = "";
   await persist();
@@ -349,7 +441,7 @@ function buildQueueFromLinks(links) {
   const queue = links.map((link, index) => {
     const route = detectRoute(link);
     const supported = route && route.status !== "unsupported";
-    const downloadedBefore = supported && Boolean(state.downloadHistory[link]);
+    const downloadedBefore = supported && Boolean(historyRecordFor(link));
     return {
       id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
       link,
@@ -359,6 +451,7 @@ function buildQueueFromLinks(links) {
       downloaderUrl: route?.url || "",
       telegramWebUrl: route?.telegramWebUrl || "",
       permissionOrigin: route?.permissionOrigin || "",
+      mediaKind: route?.mediaKind || classifyMedia({ url: link }) || (route?.platform === "suno" ? "audio" : "video"),
       message: downloadedBefore ? "Đã tải trước đó, bỏ qua" : route?.message || (supported ? "Chờ xử lý" : "Không hỗ trợ domain này")
     };
   });
@@ -374,13 +467,13 @@ function buildQueueFromReelItems(items) {
       views: item.views || 0,
       viewText: item.viewText || "",
       subfolder: item.subfolder || "",
-      status: state.downloadHistory[item.link] ? "skipped" : "pending",
+      status: historyRecordFor(item) ? "skipped" : "pending",
       platform: item.platform || route?.platform || "facebook",
       strategy: item.strategy || route?.strategy || "so9",
       downloaderUrl: item.downloaderUrl || route?.url || "https://so9.vn/9downloader/facebook",
       telegramWebUrl: route?.telegramWebUrl || "",
       permissionOrigin: route?.permissionOrigin || "",
-      message: state.downloadHistory[item.link]
+      message: historyRecordFor(item)
         ? "Đã tải trước đó, bỏ qua"
         : item.viewText || item.views ? `View: ${item.viewText || formatNumber(item.views)}` : "Chờ xử lý"
     };
@@ -453,7 +546,7 @@ async function crawlChannelVideos() {
     addLog(els.statsOnly.checked
       ? `Đã thống kê ${state.savedReelItems.length} video của kênh ${channel.label}.`
       : `Đã đưa ${state.queue.length} link ${channel.label} vào danh sách tải.`, "info");
-    await chrome.storage.local.set({ logs: state.logs });
+    await persist();
   } catch (error) {
     const message = error.message || String(error);
     addLog(message.includes("Đã dừng quét")
@@ -483,7 +576,7 @@ async function loadSavedReelsToQueue() {
   state.savedReelLinks = items.map((item) => item.link);
   state.lastCrawlSource = data.lastCrawlSource || state.lastCrawlSource;
   state.lastCrawlTime = data.lastCrawlTime || state.lastCrawlTime;
-  state.queue = buildQueueFromReelItems(items);
+  await appendToQueue(buildQueueFromReelItems(items));
   addLog(`Đã nạp ${state.queue.length} link video đã lưu vào danh sách tải.`, "info");
   await persist();
   await startQueuedDownload("Tự động tải lần lượt các link đã lưu.");
@@ -536,15 +629,17 @@ function detectRoute(link) {
       };
     }
 
-    if (DIRECT_VIDEO_PATTERN.test(url.pathname + url.search)) {
+    const mediaKind = classifyMedia({ url: url.href });
+    if (mediaKind) {
       return {
         platform: "direct",
         strategy: "direct-url",
-        message: "Tải trực tiếp file video"
+        mediaKind,
+        message: "Tải trực tiếp file media gốc"
       };
     }
 
-    if (STREAMING_PLAYLIST_PATTERN.test(url.pathname + url.search)) {
+    if (/\.(m3u8|mpd|m4s|ts)(?:$|[?#])/i.test(url.href)) {
       return {
         platform: "stream",
         strategy: "unsupported",
@@ -563,10 +658,10 @@ function detectRoute(link) {
     }
 
     return {
-      platform: "media-page",
+      platform: hostname === "suno.com" || hostname === "suno.ai" ? "suno" : "media-page",
       strategy: "direct-media",
       permissionOrigin: getPermissionOrigin(url),
-      message: "Tìm URL video trực tiếp trên trang"
+      message: "Tìm file media trực tiếp; dùng Quét media / chọn file nếu có nhiều tài nguyên"
     };
   } catch (_) {
     return null;
@@ -967,10 +1062,11 @@ async function stopRun() {
 async function clearQueue() {
   if (state.running || state.crawling) return;
   if (state.queue.length && !confirm(t("Bạn có chắc chắn muốn xóa toàn bộ danh sách tải và log không?"))) return;
-  state.queue = [];
-  state.logs = [];
-  await persist();
-  render();
+  try {
+    await queueCommand({ type: "QUEUE_CLEAR" });
+    state.logs = []; pendingLogs = [];
+    render();
+  } catch (error) { showUiError(error); }
 }
 
 function exportLogs() {
@@ -987,19 +1083,22 @@ function exportLogs() {
 }
 
 function addLog(message, level = "info") {
-  state.logs.unshift({ time: Date.now(), message, level });
+  const log = { time: Date.now(), message, level };
+  pendingLogs.push(log);
+  state.logs.unshift(log);
   state.logs = state.logs.slice(0, 300);
 }
 
 async function persist() {
   const lastCrawlMax = normalizeMaxReels(els.maxReels.value);
+  const logs = pendingLogs.splice(0);
+  if (logs.length) {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: "APPEND_UI_LOGS", logs });
+      if (!response?.ok) throw new Error(response?.error || "Không thể lưu log.");
+    } catch (error) { pendingLogs.unshift(...logs); throw error; }
+  }
   await chrome.storage.local.set({
-    queue: state.queue,
-    logs: state.logs,
-    savedReelLinks: state.savedReelLinks,
-    savedReelItems: state.savedReelItems,
-    lastCrawlSource: state.lastCrawlSource,
-    lastCrawlTime: state.lastCrawlTime,
     ...(Number.isNaN(lastCrawlMax) || els.maxReels.validity.badInput ? {} : { lastCrawlMax }),
     lastMinViews: normalizeMinViews(els.minViews.value)
   });
@@ -1035,6 +1134,7 @@ function render() {
   els.crawl.disabled = state.running || state.crawling;
   els.file.disabled = state.running || state.crawling;
   els.importText.disabled = state.running || state.crawling;
+  els.scanMedia.disabled = state.running || state.crawling;
   els.manualLinks.disabled = state.running || state.crawling;
   els.folder.disabled = state.running || state.crawling;
   els.channelUrl.disabled = state.running || state.crawling;
@@ -1052,6 +1152,7 @@ function render() {
   renderQueue();
   renderLogs();
   renderStats();
+  renderHistory();
 }
 
 function sortedStats() {
@@ -1063,7 +1164,7 @@ const WEEKDAYS = ["CN", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "
 function renderStats() {
   const channels = sortedStats();
   els.exportStats.disabled = !channels.length;
-  els.clearStats.disabled = !channels.length;
+  els.clearStats.disabled = !channels.length || state.running || state.crawling;
   els.recrawlAll.disabled = !channels.length || state.running || state.crawling;
   renderCompare(channels);
 
@@ -1161,7 +1262,7 @@ async function queueTopFromChannel(sourceUrl) {
   const channel = state.channelStats[sourceUrl];
   if (!channel || state.running) return;
   const picks = (channel.metrics?.top || channel.top || [])
-    .filter((video) => video.views > 0 && !state.downloadHistory[video.link])
+    .filter((video) => video.views > 0 && !historyRecordFor(video))
     .slice(0, 10)
     .map((video) => ({ ...video, platform: channel.platform, subfolder: channelFolderName(channel.name, channel.sourceUrl) }));
   if (!picks.length) {
@@ -1170,7 +1271,7 @@ async function queueTopFromChannel(sourceUrl) {
     render();
     return;
   }
-  const added = appendToQueue(buildQueueFromReelItems(picks));
+  const added = await appendToQueue(buildQueueFromReelItems(picks));
   addLog(`Đã thêm ${added.added} video top của ${channel.name || sourceUrl} vào danh sách tải, bỏ qua ${added.duplicates} link trùng.`, "info");
   await persist();
   render();
@@ -1252,6 +1353,7 @@ function exportStatsCsv() {
 }
 
 async function clearStats() {
+  if (state.running || state.crawling) return;
   if (!confirm(t("Xóa toàn bộ thống kê kênh?"))) return;
   state.channelStats = {};
   await chrome.storage.local.remove(["channelStats"]);
@@ -1300,6 +1402,9 @@ function renderQueue() {
       </div>
       <small>${escapeHtml(t(item.message || ""))}</small>
       ${item.status === "running" ? `<div class="progress"><b></b><em></em></div>` : ""}
+      ${["failed", "unsupported"].includes(item.status) && !state.running && !state.crawling
+        ? `<button class="ghost retry" type="button" data-id="${escapeHtml(item.id)}">${escapeHtml(t("Tải lại mục này"))}</button>`
+        : ""}
     </article>
   `).join("");
 }
